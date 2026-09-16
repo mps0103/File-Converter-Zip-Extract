@@ -13,10 +13,14 @@ The artwork keeps its transparency, so it is used the way an adaptive icon is me
 to be: it is the **foreground**, and `@color/icon_bg` (`#0B3FD4`, sampled from the
 artwork's own edge) fills in behind it.
 
-It is placed at 288px inside a 432px canvas rather than filling it. A launcher only
-shows the middle 72dp of an adaptive icon's 108dp canvas — a 1.5× zoom — so artwork
-that fills the canvas gets its edges eaten. Sized to the safe zone, the whole picture
-survives every mask: round, squircle and teardrop.
+The transparent margin is trimmed off first, then the shape is padded back to square
+and scaled to fill the whole 432px canvas.
+
+Sizing it to the 72dp safe zone instead was tried and looked wrong: a launcher mask is
+wider than that inscribed circle, so the background colour showed as a ring around the
+artwork and the picture read as small and far away. This artwork already carries its own
+generous margin, so filling the canvas puts its rounded edge where the mask falls, and
+the subject still sits nowhere near the crop.
 
 The pre-Android-8 icons in `mipmap-*dpi/` are flattened squares, because those
 devices have no adaptive icon support and no mask to do the rounding.
