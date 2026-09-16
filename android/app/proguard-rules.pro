@@ -5,6 +5,7 @@
 
 # The native converter bridge is reached by name from JS.
 -keep class com.mps.fileconverter.FileBridgeModule { *; }
+-keep class com.mps.fileconverter.ArchiveModule { *; }
 -keep class com.mps.fileconverter.FileBridgePackage { *; }
 
 # PDFBox for Android pulls in optional AWT and Bouncy Castle classes it can live without.
@@ -13,6 +14,16 @@
 -dontwarn javax.imageio.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.apache.commons.logging.**
+
+# PDFBox's JPEG 2000 filter calls an optional decoder that is not bundled. Only
+# JPX-encoded images inside a PDF need it, and those are never decoded here: text
+# is read by PDFBox and pages are drawn by Android's own PdfRenderer.
+-dontwarn com.gemalto.jp2.JP2Decoder
+-dontwarn com.gemalto.jp2.JP2Encoder
+
+# slf4j looks for a logging binder at runtime and carries on without one.
+-dontwarn org.slf4j.impl.StaticLoggerBinder
+-dontwarn org.slf4j.**
 
 # Archive decoders
 -keep class net.lingala.zip4j.** { *; }

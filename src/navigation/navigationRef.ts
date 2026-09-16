@@ -12,5 +12,10 @@ export const navigate = <T extends keyof RootStackParamList>(
   name: T,
   params: RootStackParamList[T],
 ) => {
-  if (navigationRef.isReady()) navigationRef.navigate(name as never, params as never);
+  if (!navigationRef.isReady()) return;
+  // navigate() is overloaded per route name. This helper is generic over every
+  // route at once, which the overload set cannot express, so the call is made
+  // through a narrowed signature rather than casting both arguments away.
+  const go = navigationRef.navigate as (screen: T, params: RootStackParamList[T]) => void;
+  go(name, params);
 };

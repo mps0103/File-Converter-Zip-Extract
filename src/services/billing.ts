@@ -42,8 +42,10 @@ export const getCachedEntitlement = async (): Promise<Entitlement> => {
   return current;
 };
 
-let purchaseUpdate: IAP.EmitterSubscription | null = null;
-let purchaseError: IAP.EmitterSubscription | null = null;
+// react-native-iap does not re-export EmitterSubscription, so the handle type is
+// taken from the listener itself and stays correct across library versions.
+let purchaseUpdate: ReturnType<typeof IAP.purchaseUpdatedListener> | null = null;
+let purchaseError: ReturnType<typeof IAP.purchaseErrorListener> | null = null;
 
 export const initBilling = async () => {
   if (Platform.OS !== 'android') return;
@@ -88,8 +90,10 @@ export const loadPlans = async (): Promise<Plan[]> => {
   try {
     const subs = await IAP.getSubscriptions({skus: [SUB_ID]});
     subs.forEach(s => {
-      const offer = s.subscriptionOfferDetails?.find(o => o.basePlanId === SUB_BASE_PLAN) ??
-        s.subscriptionOfferDetails?.[0];
+      // getSubscriptions returns a Play-or-Amazon union; only the Play shape carries
+      // base plans, and Amazon is never reached because billing is Play-only here.
+      const offers = 'subscriptionOfferDetails' in s ? s.subscriptionOfferDetails : undefined;
+      const offer = offers?.find(o => o.basePlanId === SUB_BASE_PLAN) ?? offers?.[0];
       plans.push({
         id: s.productId,
         kind: 'subscription',

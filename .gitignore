@@ -19,3 +19,7 @@ android/app/src/main/res/drawable-*/node_modules_*
 
 # Kotlin compiler scratch output.
 android/.kotlin/
+
+# Real signing passwords. Only keystore.properties.example is committed.
+android/keystore.properties
+android/keystores/
