@@ -46,6 +46,17 @@ export const addViewed = async (item: Omit<HistoryItem, 'id' | 'at' | 'kind'>) =
   return next;
 };
 
+/**
+ * Drops one row from the list. The file itself is left alone: this list is a
+ * record of what the app touched, not a file manager, and deleting somebody's
+ * document because they tidied a list would be unforgivable.
+ */
+export const removeHistory = async (id: string) => {
+  const next = (await getHistory()).filter(i => i.id !== id);
+  await store.write(KEYS.history, next);
+  return next;
+};
+
 export const clearHistory = async () => {
   await store.write(KEYS.history, []);
   return [] as HistoryItem[];

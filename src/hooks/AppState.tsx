@@ -14,6 +14,7 @@ import {
   addViewed,
   getHistory,
   clearHistory,
+  removeHistory,
   type HistoryItem,
 } from '@/services/history';
 import {
@@ -34,6 +35,8 @@ type Ctx = {
   recordConversion: (toolId: ToolId, files: SavedFile[]) => Promise<void>;
   refreshEntitlement: () => Promise<void>;
   wipeHistory: () => Promise<void>;
+  /** Removes one row from Recent files. The file on disk is untouched. */
+  forgetHistoryItem: (id: string) => Promise<void>;
   /** Conversions earned from rewarded ads, spent after the free allowance. */
   credits: number;
   earnCredit: () => Promise<void>;
@@ -111,6 +114,10 @@ export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
     setHistory(await clearHistory());
   }, []);
 
+  const forgetHistoryItem = useCallback(async (id: string) => {
+    setHistory(await removeHistory(id));
+  }, []);
+
   const recordView = useCallback(
     async (file: {name: string; uri: string; mime: string}) => {
       setHistory(await addViewed({name: file.name, uri: file.uri, mime: file.mime, path: ''}));
@@ -143,6 +150,7 @@ export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
       recordConversion,
       refreshEntitlement,
       wipeHistory,
+      forgetHistoryItem,
       recordView,
       credits,
       earnCredit,
@@ -160,6 +168,7 @@ export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
       recordConversion,
       refreshEntitlement,
       wipeHistory,
+      forgetHistoryItem,
       recordView,
       credits,
       earnCredit,

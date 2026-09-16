@@ -47,8 +47,10 @@ const inkForExtension = (ext: string): InkName => {
 };
 
 export const HistoryScreen = ({navigation}: Props) => {
-  const {history, wipeHistory} = useApp();
+  const {history, wipeHistory, forgetHistoryItem} = useApp();
   const [confirm, setConfirm] = useState(false);
+  // The row a long press picked out, held until the sheet is answered.
+  const [pendingRemove, setPendingRemove] = useState<HistoryItem | null>(null);
 
   /**
    * Anything the app can read opens in its own viewer. Handing it to another app
@@ -97,6 +99,13 @@ export const HistoryScreen = ({navigation}: Props) => {
                   key={item.id}
                   entering={FadeInDown.delay(Math.min(i, 8) * 40).springify().damping(18)}
                   style={[styles.row, shadow(1)]}>
+                  <Pressable
+                    // Long press anywhere on the row offers to forget it. The whole
+                    // row is the target rather than a visible button, so the list
+                    // stays a list of files instead of a list of controls.
+                    onLongPress={() => setPendingRemove(item)}
+                    delayLongPress={400}
+                    style={styles.rowTouch}>
                   <FileGlyph ink={ink} label={label} size={30} />
                   <View style={styles.text}>
                     <Text style={styles.name} numberOfLines={1}>
@@ -104,6 +113,7 @@ export const HistoryScreen = ({navigation}: Props) => {
                     </Text>
                     <Text style={styles.meta}>{meta}</Text>
                   </View>
+                  </Pressable>
                   <Pressable onPress={() => open(item)} hitSlop={10}>
                     <Text style={styles.open}>Open</Text>
                   </Pressable>
@@ -116,6 +126,28 @@ export const HistoryScreen = ({navigation}: Props) => {
           </Pressable>
         </>
       )}
+
+      <AppDialog
+        visible={!!pendingRemove}
+        title="Remove from this list?"
+        message={
+          pendingRemove
+            ? `"${pendingRemove.name}" stays in your Downloads folder. Only the entry here is removed.`
+            : ''
+        }
+        actions={[
+          {
+            label: 'Remove from here',
+            colors: ['#FF6B6E', '#C81E25'],
+            onPress: () => {
+              if (pendingRemove) forgetHistoryItem(pendingRemove.id);
+              setPendingRemove(null);
+            },
+          },
+          {label: 'Keep it', subtle: true, onPress: () => setPendingRemove(null)},
+        ]}
+        onDismiss={() => setPendingRemove(null)}
+      />
 
       <AppDialog
         visible={confirm}
@@ -151,6 +183,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     padding: space.md,
   },
+  // Wraps the glyph and the labels so the long press covers the row without
+  // swallowing the Open button beside it.
+  rowTouch: {flexDirection: 'row', alignItems: 'center', gap: space.md, flex: 1},
   text: {flex: 1},
   name: {...type.section, color: palette.ink},
   meta: {...type.caption, color: palette.inkFaint},

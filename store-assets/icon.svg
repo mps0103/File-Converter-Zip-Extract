@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 108 108">
+  <!--
+    The Play listing icon, kept as vector so it can be re-rendered at any size
+    without softening. Geometry is copied verbatim from the launcher icon at
+    android/app/src/main/res/drawable/ic_launcher_foreground.xml, over the
+    adaptive icon's background colour (@color/icon_bg). Change one and the other
+    has to follow, or the store icon stops matching the app on the device.
+  -->
+  <rect width="108" height="108" fill="#241E52"/>
+
+  <!-- left sheet -->
+  <path d="M22,39h18a4,4 0 0 1 4,4v26a4,4 0 0 1 -4,4h-18a4,4 0 0 1 -4,-4v-26a4,4 0 0 1 4,-4z" fill="#FFFFFF"/>
+  <path d="M36,39h4a4,4 0 0 1 4,4v4h-8z" fill="#FFB1B3"/>
+  <path d="M23,58h16a2.5,2.5 0 0 1 2.5,2.5v4a2.5,2.5 0 0 1 -2.5,2.5h-16a2.5,2.5 0 0 1 -2.5,-2.5v-4a2.5,2.5 0 0 1 2.5,-2.5z" fill="#E5484D"/>
+
+  <!-- right sheet -->
+  <path d="M68,39h18a4,4 0 0 1 4,4v26a4,4 0 0 1 -4,4h-18a4,4 0 0 1 -4,-4v-26a4,4 0 0 1 4,-4z" fill="#FFFFFF"/>
+  <path d="M82,39h4a4,4 0 0 1 4,4v4h-8z" fill="#A9C6FF"/>
+  <path d="M69,58h16a2.5,2.5 0 0 1 2.5,2.5v4a2.5,2.5 0 0 1 -2.5,2.5h-16a2.5,2.5 0 0 1 -2.5,-2.5v-4a2.5,2.5 0 0 1 2.5,-2.5z" fill="#2B6CE5"/>
+
+  <!-- arrow -->
+  <path d="M47,56h9v-5l7,7 -7,7v-5h-9z" fill="#FFC74D"/>
+</svg>
