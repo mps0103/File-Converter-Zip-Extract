@@ -100,6 +100,29 @@ android {
     }
 }
 
+/**
+ * A debug bundle is sometimes written into src/main/assets so the debug apk runs
+ * without Metro. A release build generates its own bundle under the same name, and
+ * the two are merged: the hand-written one can win and ship.
+ *
+ * That bundle is built with --dev true, so __DEV__ would be true in production —
+ * the "debug build only" testing panel would appear on real devices and the
+ * premium override with it. Fail the build rather than let it through quietly.
+ */
+tasks.whenTaskAdded { task ->
+    if (task.name == "mergeReleaseAssets") {
+        task.doFirst {
+            def devBundle = file("src/main/assets/index.android.bundle")
+            if (devBundle.exists()) {
+                throw new GradleException(
+                        "Delete android/app/src/main/assets/index.android.bundle before building a " +
+                        "release. It is the --dev bundle used for offline debug testing, and shipping " +
+                        "it would leave __DEV__ true in production, exposing the testing controls.")
+            }
+        }
+    }
+}
+
 dependencies {
     implementation("com.facebook.react:react-android")
     implementation "androidx.core:core-ktx:1.13.1"
