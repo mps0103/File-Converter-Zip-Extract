@@ -74,7 +74,13 @@ These ids must match `src/services/billing.ts` exactly, or the paywall loads emp
 
 ## 4. Other console sections
 
-- **Privacy policy URL** — host `docs/privacy-policy.md` and paste the public URL. It must also match the URL in `src/screens/SettingsScreen.tsx`.
+- **Privacy policy URL** — https://mps0103.github.io/File-Converter-Zip-Extract/privacy-policy.html
+
+  Served by GitHub Pages from this repo's `docs/` folder. Jekyll renders each markdown file to
+  `.html`, so the extension is part of the address — dropping it gives a 404. The same pair is
+  hard-coded in `src/screens/SettingsScreen.tsx`; change one and the other has to follow.
+
+  Terms of use: https://mps0103.github.io/File-Converter-Zip-Extract/terms-of-use.html
 - **Ads declaration** — Yes, the app contains ads.
 - **Content rating questionnaire** — no sensitive content; declare that ads are shown.
 - **Target audience** — 13+. Do not tick the children's section; the app uses an advertising ID.

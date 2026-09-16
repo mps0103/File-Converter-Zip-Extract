@@ -91,7 +91,8 @@ android/app/src/main/java/com/mps/fileconverter/
 
 1. `src/services/ads.ts` — real banner and interstitial unit ids.
 2. `android/app/src/main/AndroidManifest.xml` — real AdMob application id.
-3. `src/screens/SettingsScreen.tsx` — hosted privacy policy and terms URLs.
+3. ~~`src/screens/SettingsScreen.tsx` — hosted privacy policy and terms URLs.~~ Done: served by
+   GitHub Pages from `docs/`.
 4. `android/app/build.gradle` — bump `versionCode` and `versionName`.
 
 The rest of the release steps are in `docs/PLAY_STORE.md`.

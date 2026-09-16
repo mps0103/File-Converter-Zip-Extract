@@ -12,8 +12,13 @@ import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
-export const PRIVACY_URL = 'https://mps0103.github.io/file-converter/privacy';
-export const TERMS_URL = 'https://mps0103.github.io/file-converter/terms';
+// Published from the repo docs/ folder by GitHub Pages. The .html extension is
+// what Jekyll produces from the markdown; without it these 404, and Play rejects
+// a listing whose privacy policy link does not resolve.
+export const PRIVACY_URL =
+  'https://mps0103.github.io/File-Converter-Zip-Extract/privacy-policy.html';
+export const TERMS_URL =
+  'https://mps0103.github.io/File-Converter-Zip-Extract/terms-of-use.html';
 export const SUPPORT_EMAIL = 'info@dealtrix.com';
 
 export const SettingsScreen = ({navigation}: Props) => {
