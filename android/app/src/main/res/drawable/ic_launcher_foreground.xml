@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two sheets with an arrow between them. Sized to sit inside the adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- left sheet -->
+    <path
+        android:pathData="M22,39h18a4,4 0 0 1 4,4v26a4,4 0 0 1 -4,4h-18a4,4 0 0 1 -4,-4v-26a4,4 0 0 1 4,-4z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M36,39h4a4,4 0 0 1 4,4v4h-8z"
+        android:fillColor="#FFB1B3" />
+    <path
+        android:pathData="M23,58h16a2.5,2.5 0 0 1 2.5,2.5v4a2.5,2.5 0 0 1 -2.5,2.5h-16a2.5,2.5 0 0 1 -2.5,-2.5v-4a2.5,2.5 0 0 1 2.5,-2.5z"
+        android:fillColor="#E5484D" />
+
+    <!-- right sheet -->
+    <path
+        android:pathData="M68,39h18a4,4 0 0 1 4,4v26a4,4 0 0 1 -4,4h-18a4,4 0 0 1 -4,-4v-26a4,4 0 0 1 4,-4z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M82,39h4a4,4 0 0 1 4,4v4h-8z"
+        android:fillColor="#A9C6FF" />
+    <path
+        android:pathData="M69,58h16a2.5,2.5 0 0 1 2.5,2.5v4a2.5,2.5 0 0 1 -2.5,2.5h-16a2.5,2.5 0 0 1 -2.5,-2.5v-4a2.5,2.5 0 0 1 2.5,-2.5z"
+        android:fillColor="#2B6CE5" />
+
+    <!-- arrow -->
+    <path
+        android:pathData="M47,56h9v-5l7,7 -7,7v-5h-9z"
+        android:fillColor="#FFC74D" />
+</vector>
