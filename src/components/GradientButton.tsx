@@ -38,7 +38,7 @@ export const GradientButton = ({
           onPressIn={() => (pressed.value = 1)}
           onPressOut={() => (pressed.value = 0)}
           onPress={onPress}
-          style={[styles.subtle, {height, opacity: disabled ? 0.45 : 1}]}>
+          style={[styles.subtle, {height, borderRadius: height / 2, opacity: disabled ? 0.45 : 1}]}>
           <Text style={[type.section, {color: palette.ink}]}>{label}</Text>
         </Pressable>
       </Animated.View>
@@ -53,7 +53,7 @@ export const GradientButton = ({
         onPressIn={() => (pressed.value = 1)}
         onPressOut={() => (pressed.value = 0)}
         onPress={onPress}
-        style={[styles.wrap, {height}]}>
+        style={[styles.wrap, {height, borderRadius: height / 2}]}>
         <View style={StyleSheet.absoluteFill}>
           <Svg width="100%" height="100%">
             <Defs>
@@ -62,7 +62,22 @@ export const GradientButton = ({
                 <Stop offset="1" stopColor={colors[1]} />
               </LinearGradient>
             </Defs>
-            <Rect x={0} y={0} width="100%" height="100%" rx={radius.pill} fill="url(#btn)" />
+            {/*
+              rx is a corner radius, not a "make it round" flag. Passing the pill
+              token here gave 999, which svg clamps to half the width, and ry
+              defaults to rx and clamps to half the height — so the rect came out
+              as a full ellipse that bulged past the button on anything wide. Half
+              the height is the radius that actually makes a stadium.
+            */}
+            <Rect
+              x={0}
+              y={0}
+              width="100%"
+              height="100%"
+              rx={height / 2}
+              ry={height / 2}
+              fill="url(#btn)"
+            />
           </Svg>
         </View>
         <Text style={styles.label}>{label}</Text>
