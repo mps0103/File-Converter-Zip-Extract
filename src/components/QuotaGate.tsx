@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {AppDialog} from './AppDialog';
 import {FileGlyph} from './FileGlyph';
 import {isRewardedReady, showRewarded} from '@/services/ads';
@@ -14,10 +14,14 @@ type Props = {
 /**
  * What the user meets when the free allowance runs out.
  *
- * Three ways forward, in the order they cost the user: watch an ad for one more
- * conversion, or take a plan. The ad button is only offered when an ad is
- * actually loaded — dangling an offer that then fails to appear is worse than
- * not making it.
+ * Two ways forward, in the order they cost the user: watch an ad for one more
+ * conversion, or take a plan — monthly and lifetime both live on the plans screen.
+ *
+ * The ad button appears only once an ad is actually loaded, because offering one
+ * that then fails to appear is worse than not offering it. Readiness is polled
+ * while the dialog is open rather than read once: the gate opens the moment the
+ * allowance runs out, which is often before the ad has finished loading, and a
+ * plain call during render would leave the button hidden for the whole session.
  */
 export const QuotaGate = ({visible, onClose, onSeePlans}: Props) => {
   const {credits, earnCredit} = useApp();
@@ -36,7 +40,23 @@ export const QuotaGate = ({visible, onClose, onSeePlans}: Props) => {
     }
   };
 
-  const canWatch = isRewardedReady() && !watching;
+  const [adReady, setAdReady] = useState(isRewardedReady);
+
+  useEffect(() => {
+    if (!visible || adReady) return;
+    const timer = setInterval(() => {
+      if (isRewardedReady()) setAdReady(true);
+    }, 400);
+    return () => clearInterval(timer);
+  }, [visible, adReady]);
+
+  // Re-checked on every open: an ad is consumed by showing it, so one that was
+  // ready last time may not be this time.
+  useEffect(() => {
+    if (visible) setAdReady(isRewardedReady());
+  }, [visible]);
+
+  const canWatch = adReady && !watching;
 
   const actions = [
     ...(canWatch || watching
