@@ -2,20 +2,44 @@
 
 | File | What it is |
 | --- | --- |
-| `icon.png` | **The Play Console listing icon.** 512×512 PNG, required size. |
-| `icon-source.jpg` | The original artwork `icon.png` was made from, kept so it can be re-cut. |
-| `launcher-icon.svg` | The icon **currently installed on the device** — a redraw of `android/app/src/main/res/drawable/ic_launcher_foreground.xml`. It is *not* the same artwork as `icon.png`. |
-| `screenshots/` | Phone screenshots. Incomplete, and see the caveat below. |
+| `icon.png` | **The Play Console listing icon.** 512×512, no transparency. |
+| `icon-source.png` | The artwork everything else is cut from. Keep it: the others are derived. |
+| `launcher-icon.svg` | The old two-sheets vector. No longer the app icon — it survives only as the **monochrome** layer, which themed icons use and which needs flat line art. |
+| `screenshots/` | Phone screenshots. Incomplete, and the wrong shape — see below. |
 
-## Two things to settle before uploading
+## How the icon is used in the app
 
-**The store icon and the app icon are different pictures.** `icon.png` is the new
-artwork; the launcher icon on the phone is still the two-sheets vector described by
-`launcher-icon.svg`. Users see one in the store and a different one on their home
-screen. Making them match means rebuilding the adaptive icon from the new artwork,
-which is its own job: an adaptive icon needs a separate foreground and background,
-and fine detail gets clipped by round and squircle masks.
+The artwork keeps its transparency, so it is used the way an adaptive icon is meant
+to be: it is the **foreground**, and `@color/icon_bg` (`#0B3FD4`, sampled from the
+artwork's own edge) fills in behind it.
 
-**The screenshots are the wrong shape for Play.** They are 1260×2800, an aspect
-ratio of 2.22:1, and Play rejects anything past 2:1. Padding them to 1400×2800
-keeps every pixel of content and satisfies the limit.
+It is placed at 288px inside a 432px canvas rather than filling it. A launcher only
+shows the middle 72dp of an adaptive icon's 108dp canvas — a 1.5× zoom — so artwork
+that fills the canvas gets its edges eaten. Sized to the safe zone, the whole picture
+survives every mask: round, squircle and teardrop.
+
+The pre-Android-8 icons in `mipmap-*dpi/` are flattened squares, because those
+devices have no adaptive icon support and no mask to do the rounding.
+
+## Regenerating
+
+```bash
+# listing icon
+npx sharp-cli -i store-assets/icon-source.png -o tmp.png --format png resize 512 512
+npx sharp-cli -i tmp.png -o store-assets/icon.png --format png flatten "#0B3FD4"
+
+# adaptive foreground
+npx sharp-cli -i store-assets/icon-source.png -o fg.png --format png resize 288 288
+npx sharp-cli -i fg.png -o android/app/src/main/res/drawable-nodpi/ic_launcher_art.png \
+  --format png extend 72 72 72 72 --background "rgba(0,0,0,0)"
+```
+
+## Still to settle
+
+**The screenshots are the wrong shape for Play.** They are 1260×2800, an aspect ratio
+of 2.22:1, and Play rejects anything past 2:1. Padding to 1400×2800 keeps every pixel
+and satisfies the limit.
+
+**The splash is still the old palette.** `splash_bg` is `#241E52`, a dark purple from
+the previous icon, while the icon is now blue. Launch runs purple, then the JS splash,
+then the app.
