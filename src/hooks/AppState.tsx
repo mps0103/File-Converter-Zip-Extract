@@ -92,6 +92,16 @@ export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
   // the app — banner, interstitial, quota, paywall — follows it from this one spot.
   const premium = testEntitlement ? testEntitlement === 'premium' : entitlement.premium;
 
+  /**
+   * Ads are started whenever the app is not premium, not only at launch. Premium
+   * can fall away mid-session — a lapsed subscription, a refund, or the debug
+   * toggle being switched back — and the startup call is long past by then, so
+   * without this the session would run to its end with no ads at all.
+   */
+  useEffect(() => {
+    if (ready && !premium) initAds();
+  }, [ready, premium]);
+
   const recordConversion = useCallback(
     async (toolId: ToolId, files: SavedFile[]) => {
       await countConversion(premium);

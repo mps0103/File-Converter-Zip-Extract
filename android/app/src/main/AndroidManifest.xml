@@ -151,11 +151,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Google's public sample app id, so debug builds run without a crash.
-             Swap in your real AdMob app id before the first Play upload. -->
+        <!-- The real AdMob application id. Unit ids live in src/services/ads.ts,
+             which uses Google's test units in debug builds so nothing here can
+             generate traffic against the real ones. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"
+            android:value="ca-app-pub-2904788540387890~2300166132"
             tools:replace="android:value" />
 
         <!-- Ads are never requested before the first screen is drawn. -->

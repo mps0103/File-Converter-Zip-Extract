@@ -1,7 +1,9 @@
 <resources>
-    <color name="splash_bg">#241E52</color>
+    <!-- The pale blue the splash artwork fades to at its edges. The native splash
+         uses it so the launch does not flash a different colour before the picture. -->
+    <color name="splash_bg">#F1F7FD</color>
     <color name="canvas">#F6F5FB</color>
     <!-- Behind the adaptive icon foreground. Sampled from the artwork so the two
          meet without a seam where the launcher mask cuts the corners. -->
-    <color name="icon_bg">#0B3FD4</color>
+    <color name="icon_bg">#0140EC</color>
 </resources>

@@ -18,9 +18,9 @@ const isDev = __DEV__;
  * Replace the two production ids, and the app id in AndroidManifest.xml, before the first upload.
  */
 export const AD_UNITS = {
-  banner: isDev ? TestIds.ADAPTIVE_BANNER : 'ca-app-pub-2904788540387890/0000000001',
-  interstitial: isDev ? TestIds.INTERSTITIAL : 'ca-app-pub-2904788540387890/0000000002',
-  rewarded: isDev ? TestIds.REWARDED : 'ca-app-pub-2904788540387890/0000000003',
+  banner: isDev ? TestIds.ADAPTIVE_BANNER : 'ca-app-pub-2904788540387890/6035784056',
+  interstitial: isDev ? TestIds.INTERSTITIAL : 'ca-app-pub-2904788540387890/2096539042',
+  rewarded: isDev ? TestIds.REWARDED : 'ca-app-pub-2904788540387890/6052095928',
 };
 
 /**
@@ -39,8 +39,17 @@ let loaded = false;
 let rewarded: RewardedAd | null = null;
 let rewardedLoaded = false;
 
+let started = false;
+
+/**
+ * Safe to call more than once. It has to be, because the app can become a free
+ * app part way through a session — a subscription lapses, or a refund lands —
+ * and the ads then have to start from nothing. Calling it twice used to mean two
+ * sets of preloaded ads; the flag makes the second call a no-op instead.
+ */
 export const initAds = async () => {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== 'android' || started) return;
+  started = true;
   try {
     await requestConsent();
     await mobileAds().setRequestConfiguration({
@@ -52,7 +61,8 @@ export const initAds = async () => {
     preloadInterstitial();
     preloadRewarded();
   } catch {
-    // The app is fully usable with no ads at all.
+    // The app is fully usable with no ads at all. Let a later call try again.
+    started = false;
   }
 };
 
@@ -155,13 +165,17 @@ export const showRewarded = (): Promise<boolean> =>
   });
 
 export const maybeShowInterstitial = async (isPremium: boolean) => {
-  if (isPremium || !interstitial || !loaded) return false;
+  if (isPremium) return false;
 
   const since = await store.read<number>(KEYS.conversionsSinceAd, 0);
   const last = await store.read<number>(KEYS.adsSince, 0);
   const next = since + 1;
 
-  if (next < EVERY_N_CONVERSIONS || Date.now() - last < MIN_GAP_MS) {
+  // The count is kept even when no ad can be shown. Returning early without it
+  // meant that conversions done while an ad was still loading did not count
+  // towards the next one, so the third conversion could arrive with a tally of
+  // one and no ad appeared when it was due.
+  if (!interstitial || !loaded || next < EVERY_N_CONVERSIONS || Date.now() - last < MIN_GAP_MS) {
     await store.write(KEYS.conversionsSinceAd, next);
     return false;
   }
