@@ -1,6 +1,38 @@
-import {Platform} from 'react-native';
-import * as IAP from 'react-native-iap';
+import {DeviceEventEmitter, NativeModules, Platform} from 'react-native';
 import {KEYS, store} from './storage';
+
+/**
+ * Talks to BillingModule.kt, which wraps Google Play Billing 8 directly.
+ *
+ * Play requires Billing Library 8 as of 2026, and react-native-iap could not reach
+ * it without the New Architecture, so the native side is ours now. This file is
+ * unchanged in what it offers the rest of the app: the same functions, the same
+ * shapes. Only what sits underneath moved.
+ */
+const Billing = NativeModules.BillingBridge as {
+  start(): Promise<boolean>;
+  stop(): Promise<boolean>;
+  getPlans(subIds: string[], productIds: string[]): Promise<NativePlan[]>;
+  purchase(productId: string, offerToken: string): Promise<boolean>;
+  restore(): Promise<NativePurchase[]>;
+};
+
+type NativeOffer = {basePlanId: string; offerToken: string; price: string};
+type NativePlan = {
+  productId: string;
+  title: string;
+  type: string;
+  price: string;
+  offers: NativeOffer[];
+};
+type NativePurchase = {
+  productId: string;
+  purchaseToken: string;
+  acknowledged: boolean;
+  /** False while Play is still waiting to be paid — a cash payment, or a parent to approve. */
+  purchased: boolean;
+  purchaseTime: number;
+};
 
 /**
  * Product ids must match the Play Console exactly.
@@ -8,7 +40,7 @@ import {KEYS, store} from './storage';
  * the localised price string that Play sends back.
  */
 export const SUB_ID = 'premium_monthly';
-export const SUB_BASE_PLAN = 'monthly-49';
+export const SUB_BASE_PLAN = 'monthly-149';
 export const LIFETIME_ID = 'premium_lifetime';
 
 export type Plan = {
@@ -42,33 +74,29 @@ export const getCachedEntitlement = async (): Promise<Entitlement> => {
   return current;
 };
 
-// react-native-iap does not re-export EmitterSubscription, so the handle type is
-// taken from the listener itself and stays correct across library versions.
-let purchaseUpdate: ReturnType<typeof IAP.purchaseUpdatedListener> | null = null;
-let purchaseError: ReturnType<typeof IAP.purchaseErrorListener> | null = null;
+let purchaseSub: {remove(): void} | null = null;
+let errorSub: {remove(): void} | null = null;
 
 export const initBilling = async () => {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== 'android' || !Billing) return;
   await getCachedEntitlement();
   try {
-    await IAP.initConnection();
+    await Billing.start();
   } catch {
     return; // No Play Services. The free tier keeps working.
   }
 
-  purchaseUpdate = IAP.purchaseUpdatedListener(async purchase => {
-    if (!purchase.transactionReceipt) return;
-    const kind = purchase.productId === LIFETIME_ID ? 'lifetime' : 'subscription';
+  purchaseSub?.remove();
+  purchaseSub = DeviceEventEmitter.addListener('billingPurchase', async (p: NativePurchase) => {
+    // The native side has already acknowledged it. A purchase still pending has
+    // not been paid for, so it unlocks nothing until Play says otherwise.
+    if (!p.purchased) return;
+    const kind = p.productId === LIFETIME_ID ? 'lifetime' : 'subscription';
     await setEntitlement({premium: true, kind, since: Date.now()});
-    try {
-      // Acknowledging is required, or Play refunds the purchase after three days.
-      await IAP.finishTransaction({purchase, isConsumable: false});
-    } catch {
-      /* already acknowledged */
-    }
   });
 
-  purchaseError = IAP.purchaseErrorListener(() => {
+  errorSub?.remove();
+  errorSub = DeviceEventEmitter.addListener('billingError', () => {
     /* The screen shows its own message; nothing to do here. */
   });
 
@@ -76,63 +104,56 @@ export const initBilling = async () => {
 };
 
 export const endBilling = async () => {
-  purchaseUpdate?.remove();
-  purchaseError?.remove();
+  purchaseSub?.remove();
+  errorSub?.remove();
+  purchaseSub = null;
+  errorSub = null;
   try {
-    await IAP.endConnection();
+    await Billing?.stop();
   } catch {
     /* nothing to close */
   }
 };
 
 export const loadPlans = async (): Promise<Plan[]> => {
-  const plans: Plan[] = [];
+  if (!Billing) return [];
+  let found: NativePlan[];
   try {
-    const subs = await IAP.getSubscriptions({skus: [SUB_ID]});
-    subs.forEach(s => {
-      // getSubscriptions returns a Play-or-Amazon union; only the Play shape carries
-      // base plans, and Amazon is never reached because billing is Play-only here.
-      const offers = 'subscriptionOfferDetails' in s ? s.subscriptionOfferDetails : undefined;
-      const offer = offers?.find(o => o.basePlanId === SUB_BASE_PLAN) ?? offers?.[0];
-      plans.push({
-        id: s.productId,
-        kind: 'subscription',
-        title: s.title ?? 'Monthly',
-        price: offer?.pricingPhases.pricingPhaseList[0]?.formattedPrice ?? '',
-        offerToken: offer?.offerToken,
-      });
-    });
+    found = await Billing.getPlans([SUB_ID], [LIFETIME_ID]);
   } catch {
-    /* handled by the caller showing a retry */
+    return []; // handled by the caller showing a retry
   }
-  try {
-    const products = await IAP.getProducts({skus: [LIFETIME_ID]});
-    products.forEach(p =>
-      plans.push({id: p.productId, kind: 'lifetime', title: p.title ?? 'One time', price: p.localizedPrice ?? ''}),
-    );
-  } catch {
-    /* handled by the caller showing a retry */
-  }
-  return plans;
+
+  return found.map(p => {
+    if (p.productId === LIFETIME_ID) {
+      return {id: p.productId, kind: 'lifetime' as const, title: p.title || 'One time', price: p.price};
+    }
+    // A subscription is priced per base plan. The named one is preferred so the
+    // price shown is the one this build was built around, but any base plan is
+    // better than an empty price if the console is renamed later.
+    const offer = p.offers.find(o => o.basePlanId === SUB_BASE_PLAN) ?? p.offers[0];
+    return {
+      id: p.productId,
+      kind: 'subscription' as const,
+      title: p.title || 'Monthly',
+      price: offer?.price ?? '',
+      offerToken: offer?.offerToken,
+    };
+  });
 };
 
 export const buy = async (plan: Plan) => {
-  if (plan.kind === 'subscription') {
-    await IAP.requestSubscription({
-      sku: plan.id,
-      subscriptionOffers: plan.offerToken ? [{sku: plan.id, offerToken: plan.offerToken}] : undefined,
-    });
-  } else {
-    await IAP.requestPurchase({skus: [plan.id]});
-  }
+  if (!Billing) throw new Error('Billing is unavailable on this device.');
+  await Billing.purchase(plan.id, plan.offerToken ?? '');
 };
 
 /** Called on every launch so a reinstall or a new device keeps what was paid for. */
 export const restorePurchases = async (): Promise<Entitlement> => {
+  if (!Billing) return current;
   try {
-    const purchases = await IAP.getAvailablePurchases();
-    const lifetime = purchases.find(p => p.productId === LIFETIME_ID);
-    const sub = purchases.find(p => p.productId === SUB_ID);
+    const owned = (await Billing.restore()).filter(p => p.purchased);
+    const lifetime = owned.find(p => p.productId === LIFETIME_ID);
+    const sub = owned.find(p => p.productId === SUB_ID);
     if (lifetime || sub) {
       await setEntitlement({premium: true, kind: lifetime ? 'lifetime' : 'subscription', since: Date.now()});
     } else {

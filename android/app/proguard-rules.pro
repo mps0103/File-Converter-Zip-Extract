@@ -6,6 +6,7 @@
 # The native converter bridge is reached by name from JS.
 -keep class com.mps.fileconverter.FileBridgeModule { *; }
 -keep class com.mps.fileconverter.ArchiveModule { *; }
+-keep class com.mps.fileconverter.BillingModule { *; }
 -keep class com.mps.fileconverter.FileBridgePackage { *; }
 
 # PDFBox for Android pulls in optional AWT and Bouncy Castle classes it can live without.
@@ -34,7 +35,9 @@
 -dontwarn com.github.luben.**
 -dontwarn org.tukaani.xz.**
 
-# Play Billing
+# Play Billing. The library is reached reflectively by the Play Store app, and its
+# listener callbacks are only ever called from there, so it is kept whole.
+-keep class com.android.billingclient.** { *; }
 -keep class com.android.vending.billing.** { *; }
 
 # Google Mobile Ads
