@@ -214,7 +214,7 @@ export const SettingsScreen = ({navigation}: Props) => {
         </View>
       ) : null}
 
-      <Text style={styles.version}>File Converter & Zip Extract · version 1.0.2</Text>
+      <Text style={styles.version}>File Converter & Zip Extract · version 1.0.3</Text>
     </Screen>
   );
 };
