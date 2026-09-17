@@ -23,3 +23,8 @@ android/.kotlin/
 # Real signing passwords. Only keystore.properties.example is committed.
 android/keystore.properties
 android/keystores/
+
+# Built release bundles — 37 MB each, rebuildable, never in git
+release/
+*.aab
+*.apk
