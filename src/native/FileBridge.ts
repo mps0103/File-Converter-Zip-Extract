@@ -31,10 +31,31 @@ export type RenderedPage = {base64: string; width: number; height: number};
 
 export type ArchiveEntryInfo = {name: string; size: number};
 
+export type SniffedFormat =
+  | 'pdf'
+  | 'docx'
+  | 'xlsx'
+  | 'pptx'
+  | 'zip'
+  | '7z'
+  | 'rar'
+  | 'gz'
+  | 'bz2'
+  | 'xz'
+  | 'tar'
+  | 'text'
+  | 'unknown';
+
 type Bridge = {
   pickFile(mimeTypes: string[]): Promise<PickedFile>;
   /** Metadata for a uri handed over by an "Open with" intent. */
   describeUri(uri: string): Promise<PickedFile>;
+  /**
+   * What the file actually is, read from its first bytes. Used when the name and
+   * the MIME type are both uninformative, which is common for a file handed over
+   * by another app.
+   */
+  sniffFormat(uri: string): Promise<SniffedFormat>;
   readBase64(uri: string): Promise<string>;
   saveToDownloads(base64: string, fileName: string, mime: string): Promise<SavedFile>;
   /** password is '' for an ordinary PDF and the key for a locked one. */
@@ -60,6 +81,16 @@ type ArchiveBridgeType = {
 const missing = () => {
   throw new Error('The converter engine is not linked. Rebuild the app.');
 };
+
+/**
+ * True in a debug build of the app, false in anything Play could ship.
+ *
+ * Deliberately not __DEV__: that only means the JavaScript came from Metro, and a
+ * debug APK built to run without Metro has a production bundle inside it. Gating
+ * the developer settings on __DEV__ hid them from the one build they exist for.
+ */
+export const IS_DEBUG_BUILD: boolean =
+  (NativeModules.FileBridge as {debugBuild?: boolean} | undefined)?.debugBuild === true;
 
 export const FileBridge: Bridge =
   (NativeModules.FileBridge as Bridge) ?? new Proxy({} as Bridge, {get: () => missing});

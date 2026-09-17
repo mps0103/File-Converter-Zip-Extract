@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -87,6 +88,9 @@ export const ViewerScreen = ({route, navigation}: Props) => {
   const {width} = useWindowDimensions();
   const [file, setFile] = useState<PickedFile | null>(route.params?.file ?? null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Which sheet of a workbook is on screen. Reset whenever a new file is opened,
+  // or sheet three of the last file would be asked for in a file with one.
+  const [sheet, setSheet] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -100,6 +104,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
   const load = useCallback(async (target: PickedFile, pass = '') => {
     setBusy(true);
     setError(null);
+    setSheet(0);
     try {
       setPreview(await buildPreview(target, pass));
       setNeedsPassword(false);
@@ -304,16 +309,55 @@ export const ViewerScreen = ({route, navigation}: Props) => {
       );
     }
 
+    if (preview.kind === 'sheet') {
+      const active = preview.sheets[Math.min(sheet, preview.sheets.length - 1)];
+      return (
+        <View style={[styles.webWrap, styles.webFill]}>
+          <WebView
+            key={active.name}
+            originWhitelist={['*']}
+            source={{html: active.html}}
+            style={styles.web}
+            javaScriptEnabled={false}
+            // Pinch to zoom, so a wide sheet can be pulled back far enough to read.
+            setBuiltInZoomControls
+            setDisplayZoomControls={false}
+            setSupportMultipleWindows={false}
+            onShouldStartLoadWithRequest={req => req.url === 'about:blank' || req.url.startsWith('data:')}
+          />
+          {preview.sheets.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.tabs}
+              contentContainerStyle={styles.tabsRow}>
+              {preview.sheets.map((sh, i) => (
+                <Pressable
+                  key={sh.name}
+                  onPress={() => setSheet(i)}
+                  style={[styles.tab, i === sheet && styles.tabOn]}>
+                  <Text style={[styles.tabText, i === sheet && styles.tabTextOn]} numberOfLines={1}>
+                    {sh.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+        </View>
+      );
+    }
+
     // html
     return (
-      <View style={[styles.webWrap, {height: Math.max(420, width * 1.6)}]}>
+      <View style={[styles.webWrap, styles.webFill]}>
         <WebView
           originWhitelist={['*']}
           source={{html: preview.html}}
           style={styles.web}
-          // Nothing in a preview should be able to reach the network or leave the page.
+          // No script at all. A .html file arriving from a chat is rendered inert.
           javaScriptEnabled={false}
           setSupportMultipleWindows={false}
+          // Nothing in a preview should be able to reach the network or leave the page.
           onShouldStartLoadWithRequest={req => req.url === 'about:blank' || req.url.startsWith('data:')}
         />
       </View>
@@ -326,7 +370,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
     <Screen
       title="View a file"
       subtitle={file ? file.name : 'Read it without converting it'}
-      scroll={preview?.kind !== 'html'}
+      scroll={preview?.kind !== 'html' && preview?.kind !== 'sheet'}
       footer={<AdBanner />}>
       {file ? (
         <Pressable onPress={pick} style={styles.swap}>
@@ -403,4 +447,34 @@ const styles = StyleSheet.create({
     borderColor: palette.hairline,
   },
   web: {flex: 1, backgroundColor: '#FFFFFF'},
+  // Fills whatever is left between the header and the ad banner. A fixed height
+  // here ran past the bottom of the screen, and the sheet tabs went under the
+  // banner with it.
+  webFill: {flex: 1},
+  // The sheet tabs are drawn here rather than inside the page so they keep their
+  // size when the sheet is pinched, and stay put when it is scrolled.
+  // An explicit height and no shrinking: the WebView beside it is flex:1, and a
+  // ScrollView left to size itself was squeezed down to a few pixels.
+  tabs: {
+    height: 47,
+    flexGrow: 0,
+    flexShrink: 0,
+    backgroundColor: '#F2F2F2',
+    borderTopWidth: 1,
+    borderTopColor: '#C8C8C8',
+  },
+  tabsRow: {alignItems: 'stretch'},
+  tab: {
+    height: 46,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: '#E4E4E4',
+    borderRightWidth: 1,
+    borderRightColor: '#D4D4D4',
+    borderTopWidth: 3,
+    borderTopColor: 'transparent',
+  },
+  tabOn: {backgroundColor: '#FFFFFF', borderTopColor: '#107C41'},
+  tabText: {fontSize: 15, color: '#444444', maxWidth: 200},
+  tabTextOn: {color: '#107C41', fontWeight: '700'},
 });

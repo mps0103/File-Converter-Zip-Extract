@@ -21,6 +21,7 @@ import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import java.io.File
 import java.io.FileOutputStream
+import java.util.zip.ZipInputStream
 
 /**
  * Every byte stays on the device. Nothing here opens a socket.
@@ -36,6 +37,17 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
     }
 
     override fun getName() = "FileBridge"
+
+    /**
+     * debugBuild says whether this is a debug build of the app, which is not the
+     * same question as React Native's __DEV__.
+     *
+     * __DEV__ means "the JavaScript came from Metro". A debug APK built to run on
+     * its own carries a production JS bundle, so __DEV__ is false in it and the
+     * developer settings vanished from exactly the build meant for testing. This
+     * comes from BuildConfig instead, which is false in anything Play could ship.
+     */
+    override fun getConstants(): Map<String, Any> = mapOf("debugBuild" to BuildConfig.DEBUG)
 
     // ---------------------------------------------------------------- picking
 
@@ -366,6 +378,98 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
         } catch (e: Exception) {
             promise.reject("share_failed", e.message, e)
         }
+    }
+
+    // ------------------------------------------------------- format sniffing
+
+    /**
+     * What a file actually is, judged by its first bytes rather than its name.
+     *
+     * Needed because a file arriving from another app through "Open with" often
+     * carries neither. A chat app may hand over a uri whose display name has no
+     * extension and whose provider reports application/octet-stream for anything
+     * it did not create, and the app was then left with nothing to go on.
+     *
+     * Returns one of: pdf, docx, xlsx, pptx, zip, 7z, rar, gz, bz2, xz, tar,
+     * text, unknown.
+     */
+    @ReactMethod
+    fun sniffFormat(uriString: String, promise: Promise) {
+        try {
+            val uri = Uri.parse(uriString)
+            val head = ByteArray(512)
+            var filled = 0
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                while (filled < head.size) {
+                    val n = input.read(head, filled, head.size - filled)
+                    if (n <= 0) break
+                    filled += n
+                }
+            } ?: return promise.resolve("unknown")
+
+            promise.resolve(
+                when {
+                    startsWith(head, filled, 0x25, 0x50, 0x44, 0x46) -> "pdf" // %PDF
+                    startsWith(head, filled, 0x50, 0x4B, 0x03, 0x04) -> insideZip(uri)
+                    startsWith(head, filled, 0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C) -> "7z"
+                    startsWith(head, filled, 0x52, 0x61, 0x72, 0x21) -> "rar"
+                    startsWith(head, filled, 0xFD, 0x37, 0x7A, 0x58, 0x5A) -> "xz"
+                    startsWith(head, filled, 0x1F, 0x8B) -> "gz"
+                    startsWith(head, filled, 0x42, 0x5A, 0x68) -> "bz2"
+                    // tar has no leading magic; its marker sits at offset 257.
+                    filled > 262 && String(head, 257, 5, Charsets.US_ASCII) == "ustar" -> "tar"
+                    looksLikeText(head, filled) -> "text"
+                    else -> "unknown"
+                },
+            )
+        } catch (e: Exception) {
+            promise.resolve("unknown")
+        }
+    }
+
+    private fun startsWith(buf: ByteArray, filled: Int, vararg bytes: Int): Boolean {
+        if (filled < bytes.size) return false
+        return bytes.withIndex().all { (i, b) -> buf[i] == b.toByte() }
+    }
+
+    /**
+     * docx, xlsx and pptx are all zip files, so the container has to be opened to
+     * tell them apart. Only the entry names are needed and they appear near the
+     * front, so the scan stops early rather than reading a large workbook twice.
+     */
+    private fun insideZip(uri: Uri): String {
+        try {
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                ZipInputStream(input).use { zip ->
+                    var seen = 0
+                    while (seen < 40) {
+                        val entry = zip.nextEntry ?: break
+                        val name = entry.name
+                        when {
+                            name.startsWith("xl/") -> return "xlsx"
+                            name.startsWith("word/") -> return "docx"
+                            name.startsWith("ppt/") -> return "pptx"
+                        }
+                        seen++
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // A zip that cannot be walked is still a zip.
+        }
+        return "zip"
+    }
+
+    /** No NUL bytes and mostly printable: good enough to offer it as text. */
+    private fun looksLikeText(buf: ByteArray, filled: Int): Boolean {
+        if (filled == 0) return false
+        var printable = 0
+        for (i in 0 until filled) {
+            val b = buf[i].toInt() and 0xFF
+            if (b == 0) return false
+            if (b >= 0x20 || b == 0x09 || b == 0x0A || b == 0x0D) printable++
+        }
+        return printable * 100 / filled >= 95
     }
 
     companion object {

@@ -28,6 +28,8 @@ export const KEYS = {
   conversionsSinceAd: 'ads.sinceLast',
   /** Conversions earned from rewarded ads. */
   credits: 'quota.credits',
-  /** Debug builds only. Deliberately not the entitlement key. */
+  /** Debug builds, or a release unlocked by hand. Deliberately not the entitlement key. */
   testEntitlement: 'debug.testEntitlement',
+  /** Set once the developer unlock has been entered on this device. */
+  developer: 'debug.developer',
 } as const;

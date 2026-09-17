@@ -2,6 +2,7 @@ import {Platform} from 'react-native';
 import mobileAds, {
   AdEventType,
   AdsConsent,
+  AdsConsentPrivacyOptionsRequirementStatus,
   AdsConsentStatus,
   InterstitialAd,
   MaxAdContentRating,
@@ -81,6 +82,22 @@ export const requestConsent = async () => {
 };
 
 /** Wired to the "Ad privacy choices" row in Settings, which Google requires to stay reachable. */
+/**
+ * Whether Google requires this user to be offered a way to change their ad consent.
+ *
+ * Only true where privacy law demands it, which in practice means the EEA and the
+ * UK. Everywhere else the form does not exist, and the settings row that opens it
+ * was a dead end — it did nothing when tapped, because there was nothing to show.
+ */
+export const privacyOptionsRequired = async () => {
+  try {
+    const info = await AdsConsent.getConsentInfo();
+    return info.privacyOptionsRequirementStatus === AdsConsentPrivacyOptionsRequirementStatus.REQUIRED;
+  } catch {
+    return false;
+  }
+};
+
 export const showPrivacyOptions = async () => {
   try {
     await AdsConsent.showPrivacyOptionsForm();
