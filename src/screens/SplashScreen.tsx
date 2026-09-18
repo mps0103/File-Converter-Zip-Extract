@@ -33,7 +33,7 @@ export const SplashScreen = ({onDone}: {onDone: () => void}) => {
   return (
     <Animated.View style={[styles.root, fade]}>
       {/* The artwork is light, so the status bar icons have to be dark to stay legible. */}
-      <StatusBar barStyle="dark-content" backgroundColor={SPLASH_BG} />
+      <StatusBar barStyle="dark-content" />
       <Image source={require('../../assets/splash.png')} style={styles.art} resizeMode="cover" />
     </Animated.View>
   );

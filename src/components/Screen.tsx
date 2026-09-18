@@ -21,7 +21,7 @@ export const Screen = ({title, subtitle, right, scroll = true, footer, children}
   const bodyInset = footer ? 0 : insets.bottom;
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={palette.canvas} />
+      <StatusBar barStyle="dark-content" />
       {title ? (
         <View style={styles.header}>
           <View style={styles.headerText}>

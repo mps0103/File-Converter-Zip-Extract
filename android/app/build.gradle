@@ -123,6 +123,9 @@ tasks.whenTaskAdded { task ->
 dependencies {
     implementation("com.facebook.react:react-android")
     implementation "androidx.core:core-ktx:1.13.1"
+    // enableEdgeToEdge(), which sets transparent system bars the same way on every
+    // API level this app supports.
+    implementation "androidx.activity:activity-ktx:1.9.3"
     implementation "androidx.multidex:multidex:2.0.1"
 
     // Google Play billing, talked to directly by BillingModule.kt. Play requires 8.x.
