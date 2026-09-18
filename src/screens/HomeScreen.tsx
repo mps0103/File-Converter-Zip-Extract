@@ -1,5 +1,5 @@
 import React, {useMemo, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
 import Animated, {FadeIn} from 'react-native-reanimated';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
@@ -15,6 +15,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export const HomeScreen = ({navigation}: Props) => {
   const [group, setGroup] = useState<Tool['group'] | 'All'>('All');
+
+  // Two cards side by side on a phone, more when there is room — a rotated phone,
+  // a foldable opened out, a tablet. Fixing it at two made each card enormous and
+  // wasted most of a wide screen. 190 is about the narrowest a card reads well at.
+  const {width} = useWindowDimensions();
+  const columns = Math.min(4, Math.max(2, Math.floor(Math.min(width, 720) / 190)));
 
   const tools = useMemo(
     () => (group === 'All' ? TOOLS : TOOLS.filter(t => t.group === group)),
@@ -57,7 +63,7 @@ export const HomeScreen = ({navigation}: Props) => {
 
       <Animated.View key={group} entering={FadeIn.duration(220)} style={styles.grid}>
         {tools.map((tool, i) => (
-          <View key={tool.id} style={styles.cell}>
+          <View key={tool.id} style={[styles.cell, {width: `${100 / columns}%`}]}>
             <ToolCard tool={tool} index={i} onPress={open} />
           </View>
         ))}
@@ -103,7 +109,7 @@ const styles = StyleSheet.create({
   filterText: {...type.caption, color: palette.inkSoft},
   filterTextActive: {color: '#FFFFFF'},
   grid: {flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -space.sm / 2},
-  cell: {width: '50%', paddingHorizontal: space.sm / 2, paddingBottom: space.md},
+  cell: {paddingHorizontal: space.sm / 2, paddingBottom: space.md},
   links: {flexDirection: 'row', gap: space.md, marginTop: space.sm},
   link: {
     flex: 1,

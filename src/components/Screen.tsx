@@ -3,6 +3,16 @@ import {ScrollView, StatusBar, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette, space, type} from '@/theme';
 
+/**
+ * The widest the content is ever laid out, whatever the screen.
+ *
+ * Phones never reach it. A tablet, a foldable opened out, or a phone on its side
+ * would otherwise stretch a line of text or a row of cards the full width, which
+ * is hard to read and looks like a phone app that has been pulled out of shape.
+ * Past this width the content stays put and the space falls either side of it.
+ */
+const CONTENT_MAX_WIDTH = 720;
+
 type Props = {
   title?: string;
   subtitle?: string;
@@ -32,9 +42,15 @@ export const Screen = ({title, subtitle, right, scroll = true, footer, children}
         </View>
       ) : null}
       <Body
-        style={scroll ? styles.body : [styles.body, {paddingBottom: bodyInset}]}
+        style={
+          scroll
+            ? styles.body
+            : [styles.body, styles.centred, {paddingBottom: bodyInset}]
+        }
         contentContainerStyle={
-          scroll ? [styles.content, {paddingBottom: space.xxl + bodyInset}] : undefined
+          scroll
+            ? [styles.content, styles.centred, {paddingBottom: space.xxl + bodyInset}]
+            : undefined
         }
         showsVerticalScrollIndicator={false}>
         {children}
@@ -46,7 +62,13 @@ export const Screen = ({title, subtitle, right, scroll = true, footer, children}
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: palette.canvas},
+  // Applied to the header and to the body, so the title stays above the content it
+  // belongs to rather than drifting off to the left edge of a wide screen.
+  centred: {width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center'},
   header: {
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
