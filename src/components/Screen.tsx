@@ -6,12 +6,15 @@ import {palette, space, type} from '@/theme';
 /**
  * The widest the content is ever laid out, whatever the screen.
  *
- * Phones never reach it. A tablet, a foldable opened out, or a phone on its side
- * would otherwise stretch a line of text or a row of cards the full width, which
- * is hard to read and looks like a phone app that has been pulled out of shape.
- * Past this width the content stays put and the space falls either side of it.
+ * Set above what a phone on its side measures — this one is 848dp in landscape —
+ * so a turned phone uses the whole width it has. A cap of 720 looked like a
+ * mistake there: eighty-odd dp of empty margin down each side of a screen that was
+ * short of room already.
+ *
+ * It bites on a tablet or an opened foldable, which are wider still, and where a
+ * line of text run edge to edge is genuinely hard to read.
  */
-const CONTENT_MAX_WIDTH = 720;
+const CONTENT_MAX_WIDTH = 900;
 
 type Props = {
   title?: string;

@@ -20,7 +20,7 @@ export const HomeScreen = ({navigation}: Props) => {
   // a foldable opened out, a tablet. Fixing it at two made each card enormous and
   // wasted most of a wide screen. 190 is about the narrowest a card reads well at.
   const {width} = useWindowDimensions();
-  const columns = Math.min(4, Math.max(2, Math.floor(Math.min(width, 720) / 190)));
+  const columns = Math.min(4, Math.max(2, Math.floor(Math.min(width, 900) / 190)));
 
   const tools = useMemo(
     () => (group === 'All' ? TOOLS : TOOLS.filter(t => t.group === group)),
