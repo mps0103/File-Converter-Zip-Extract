@@ -4,8 +4,12 @@ import {getCredits, spendCredit} from './credits';
 /**
  * Conversions a new user gets before the paywall appears. Extracting an archive
  * counts as one; viewing never does, because the viewer is free.
+ *
+ * Raised from 10 to 50 for the testing period, so the app can be used properly
+ * before the limit is met. Every screen that mentions the allowance reads it from
+ * here, so lowering it again is this one line.
  */
-export const FREE_CONVERSIONS = 10;
+export const FREE_CONVERSIONS = 50;
 
 export const getUsed = () => store.read<number>(KEYS.used, 0);
 
@@ -24,7 +28,7 @@ export const countConversion = async (isPremium: boolean) => {
   if (isPremium) return;
   const used = await getUsed();
   // The free allowance is spent first; credits are only touched once it is gone,
-  // so somebody who watched an ad early still gets their ten free conversions.
+  // so somebody who watched an ad early still gets the whole free allowance.
   if (used < FREE_CONVERSIONS) {
     await store.write(KEYS.used, used + 1);
     return;

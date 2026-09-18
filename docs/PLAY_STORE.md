@@ -36,7 +36,7 @@ HONEST ABOUT QUALITY
 Each tool tells you plainly what carries over before you convert. A scanned PDF has no text inside it to pull out, and we say so instead of handing you an empty file.
 
 FREE AND PREMIUM
-Start with five free conversions. Premium removes the limit and every ad, as a monthly subscription or a single one-time payment.
+Start with a batch of free conversions. Premium removes the limit and every ad, as a monthly subscription or a single one-time payment.
 
 Questions: info@dealtrix.com
 ```

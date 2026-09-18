@@ -7,7 +7,7 @@ import {KEYS, store} from './storage';
  * Kept apart from the free tally rather than decrementing it, so the two can be
  * reasoned about separately: the allowance is a fixed grant that never comes
  * back, a credit is something the user worked for. Mixing them would make
- * "10 free conversions" untrue the moment somebody watched an ad.
+ * the stated free allowance untrue the moment somebody watched an ad.
  */
 export const getCredits = () => store.read<number>(KEYS.credits, 0);
 
