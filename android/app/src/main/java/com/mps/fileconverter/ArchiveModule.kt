@@ -12,9 +12,22 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.github.junrar.Archive
 import net.lingala.zip4j.ZipFile
 import net.lingala.zip4j.exception.ZipException
+import net.lingala.zip4j.io.outputstream.ZipOutputStream
+import net.lingala.zip4j.model.ZipParameters
+import net.lingala.zip4j.model.enums.AesKeyStrength
+import net.lingala.zip4j.model.enums.CompressionMethod
+import net.lingala.zip4j.model.enums.EncryptionMethod
+import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
+import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
 import org.apache.commons.compress.compressors.CompressorStreamFactory
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorOutputStream
+import java.io.OutputStream
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -314,6 +327,196 @@ class ArchiveModule(private val ctx: ReactApplicationContext) : ReactContextBase
         return child
     }
 
+    // ------------------------------------------------------- making an archive
+
+    /** One file on its way into an archive, with the name and size it will carry. */
+    private data class Source(val uri: Uri, val name: String, val size: Long)
+
+    /**
+     * Packs the chosen files into a single archive and saves it to Downloads.
+     *
+     * @param format zip, 7z, tar, tar.gz, tar.bz2 or tar.xz
+     * @param password encrypts the archive; only zip can carry one. Empty for none.
+     *
+     * Nothing is copied first: each file is streamed from its uri straight into the
+     * archive, so packing a gigabyte does not need a spare gigabyte of cache. The one
+     * exception is a file whose provider will not say how big it is, because tar has
+     * to write the length into the header before the bytes.
+     */
+    @ReactMethod
+    fun createArchive(
+        uris: ReadableArray,
+        format: String,
+        password: String,
+        baseName: String,
+        promise: Promise,
+    ) {
+        val staged = mutableListOf<File>()
+        val out = File(ctx.cacheDir, "${safeName(baseName, "archive")}.$format")
+        try {
+            if (password.isNotEmpty() && format != "zip") {
+                throw IllegalArgumentException("Only a zip can be password protected.")
+            }
+
+            val sources = collect(uris)
+            if (sources.isEmpty()) throw IllegalStateException("No files were chosen.")
+
+            out.parentFile?.mkdirs()
+            out.delete()
+
+            when (format) {
+                "zip" -> writeZip(sources, out, password)
+                "7z" -> writeSevenZ(sources, out)
+                "tar", "tar.gz", "tar.bz2", "tar.xz" -> writeTar(sources, out, format, staged)
+                else -> throw IllegalArgumentException("$format archives cannot be created.")
+            }
+
+            emit("Saving the archive", sources.size, sources.size)
+            val result = publish(out, "", out.name)
+            promise.resolve(result)
+        } catch (e: Exception) {
+            promise.reject("create_failed", e.message ?: "The archive could not be made.")
+        } finally {
+            out.delete()
+            staged.forEach { it.delete() }
+        }
+    }
+
+    /**
+     * Names are made unique before anything is written. Two files picked from
+     * different folders can easily share a name, and an archive holding the same name
+     * twice confuses most tools that open it — some show one, some overwrite.
+     */
+    private fun collect(uris: ReadableArray): List<Source> {
+        val used = mutableSetOf<String>()
+        val sources = mutableListOf<Source>()
+        for (i in 0 until uris.size()) {
+            val uri = Uri.parse(uris.getString(i) ?: continue)
+            var name = safeName(queryName(uri), "file")
+            if (!used.add(name.lowercase())) {
+                val stem = name.substringBeforeLast('.', name)
+                val ext = name.substringAfterLast('.', "")
+                var n = 2
+                do {
+                    name = if (ext.isEmpty()) "$stem ($n)" else "$stem ($n).$ext"
+                    n++
+                } while (!used.add(name.lowercase()))
+            }
+            sources += Source(uri, name, querySize(uri))
+        }
+        return sources
+    }
+
+    private fun querySize(uri: Uri): Long {
+        ctx.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            val idx = c.getColumnIndex(OpenableColumns.SIZE)
+            if (c.moveToFirst() && idx >= 0 && !c.isNull(idx)) return c.getLong(idx)
+        }
+        return -1L
+    }
+
+    private fun open(uri: Uri): InputStream =
+        ctx.contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("A chosen file could not be read.")
+
+    private fun writeZip(sources: List<Source>, out: File, password: String) {
+        val stream = if (password.isEmpty()) {
+            ZipOutputStream(FileOutputStream(out))
+        } else {
+            ZipOutputStream(FileOutputStream(out), password.toCharArray())
+        }
+        stream.use { zip ->
+            sources.forEachIndexed { i, src ->
+                emit("Adding ${src.name}", i, sources.size)
+                val params = ZipParameters().apply {
+                    fileNameInZip = src.name
+                    compressionMethod = CompressionMethod.DEFLATE
+                    if (password.isNotEmpty()) {
+                        isEncryptFiles = true
+                        // AES-256 rather than the zip standard's own cipher, which is
+                        // old enough to be broken by anyone who cares to.
+                        encryptionMethod = EncryptionMethod.AES
+                        aesKeyStrength = AesKeyStrength.KEY_STRENGTH_256
+                    }
+                }
+                zip.putNextEntry(params)
+                open(src.uri).use { it.copyTo(zip, DEFAULT_BUFFER_SIZE) }
+                zip.closeEntry()
+            }
+        }
+    }
+
+    private fun writeSevenZ(sources: List<Source>, out: File) {
+        SevenZOutputFile(out).use { seven ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            sources.forEachIndexed { i, src ->
+                emit("Adding ${src.name}", i, sources.size)
+                val entry = SevenZArchiveEntry().apply {
+                    name = src.name
+                    if (src.size >= 0) size = src.size
+                }
+                seven.putArchiveEntry(entry)
+                open(src.uri).use { input ->
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        seven.write(buffer, 0, read)
+                    }
+                }
+                seven.closeArchiveEntry()
+            }
+        }
+    }
+
+    /**
+     * @param staged collects any temporary copies, so the caller can delete them
+     *               whether this finishes or throws.
+     */
+    private fun writeTar(sources: List<Source>, out: File, format: String, staged: MutableList<File>) {
+        val raw = FileOutputStream(out)
+        val compressed: OutputStream = when (format) {
+            "tar.gz" -> GzipCompressorOutputStream(raw)
+            "tar.bz2" -> BZip2CompressorOutputStream(raw)
+            "tar.xz" -> XZCompressorOutputStream(raw)
+            else -> raw
+        }
+        TarArchiveOutputStream(compressed).use { tar ->
+            // Long names and large files are both commonplace; without these a name
+            // over 100 characters is truncated and anything past 8 GB cannot be stored.
+            tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
+            tar.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX)
+
+            sources.forEachIndexed { i, src ->
+                emit("Adding ${src.name}", i, sources.size)
+                // tar writes each file's length into its header, before the bytes, so a
+                // size the provider would not give up has to be measured by copying.
+                var size = src.size
+                var from = src.uri
+                if (size < 0) {
+                    val copy = File(ctx.cacheDir, "stage_${System.currentTimeMillis()}_$i")
+                    staged += copy
+                    open(src.uri).use { input -> FileOutputStream(copy).use { input.copyTo(it) } }
+                    size = copy.length()
+                    from = Uri.fromFile(copy)
+                }
+                val entry = TarArchiveEntry(src.name).apply { setSize(size) }
+                tar.putArchiveEntry(entry)
+                val written = open(from).use { it.copyTo(tar, DEFAULT_BUFFER_SIZE) }
+                // The header was written before the bytes, so a provider that reported
+                // the wrong length has already corrupted this entry. commons-compress
+                // notices too, but says only that the count disagreed; naming the file
+                // is the difference between a fixable problem and a mystery.
+                if (written != size) {
+                    throw IllegalStateException(
+                        "\"${src.name}\" changed size while it was being packed. " +
+                            "Try again, or leave that file out.",
+                    )
+                }
+                tar.closeArchiveEntry()
+            }
+        }
+    }
+
     private fun publish(file: File, folder: String, relative: String): WritableMap {
         val mime = MimeTypeMap.getSingleton()
             .getMimeTypeFromExtension(file.extension.lowercase()) ?: "application/octet-stream"
@@ -356,6 +559,36 @@ class ArchiveModule(private val ctx: ReactApplicationContext) : ReactContextBase
             putString("name", file.name)
             putString("mime", mime)
         }
+    }
+
+    /**
+     * Makes a name safe to write, without rewriting it.
+     *
+     * Deliberately not sanitise(): that keeps only [\w-. ()], and \w is ASCII, so a
+     * Hindi, Arabic or even accented name came out as a row of spaces. Inside an
+     * archive that is worse than untidy — two such names collide and the second is
+     * stored as " (2)". A name belongs to whoever made the file.
+     *
+     * What does have to go is anything that would turn an entry name into a path:
+     * separators, a leading dot, and control characters.
+     */
+    private fun safeName(name: String, fallback: String): String {
+        val cleaned = buildString {
+            for (ch in name) {
+                when {
+                    // Separators and the characters Windows and Android refuse. A
+                    // separator matters most: an entry name is a path inside the
+                    // archive, and one containing a slash unpacks into a folder of
+                    // its own — or, with "..", outside the one it was meant for.
+                    ch == '\\' || ch == '/' || ch == ':' || ch == '*' || ch == '?' ||
+                        ch == '"' || ch == '<' || ch == '>' || ch == '|' -> append('_')
+                    // Control characters, which no file name has any business holding.
+                    ch.code < 0x20 || ch.code == 0x7F -> Unit
+                    else -> append(ch)
+                }
+            }
+        }.trim().trimStart('.').trim()
+        return cleaned.ifBlank { fallback }
     }
 
     private fun sanitise(name: String) =

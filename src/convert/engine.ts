@@ -296,7 +296,10 @@ export async function convert(
   const one = files[0];
   onProgress(5, 'Getting ready');
 
-  const run: Record<ToolId, () => Promise<ConvertResult>> = {
+  // make-archive is deliberately absent: it takes many files, a format and a
+  // password, so it has its own screen and calls the native writer directly rather
+  // than passing through this one-file-in, one-file-out engine.
+  const run: Record<Exclude<ToolId, 'make-archive'>, () => Promise<ConvertResult>> = {
     'pdf-to-word': () => pdfToWord(one, onProgress, options),
     'pdf-to-excel': () => pdfToExcel(one, onProgress, options),
     'pdf-to-text': () => pdfToText(one, onProgress, options),
@@ -310,7 +313,10 @@ export async function convert(
     'extract-archive': () => extractArchive(one, onProgress, options),
   };
 
-  const result = await run[tool.id]();
+  const step = run[tool.id as keyof typeof run];
+  if (!step) throw new Error('That tool is not handled here.');
+
+  const result = await step();
   onProgress(100, 'Done');
   return result;
 }

@@ -31,6 +31,10 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
 
     private var pickPromise: Promise? = null
 
+    // Whether the pick in flight was started by pickFiles, which answers with an
+    // array, rather than pickFile, which answers with one file.
+    private var pickMultiple = false
+
     init {
         ctx.addActivityEventListener(this)
         PDFBoxResourceLoader.init(ctx.applicationContext)
@@ -52,14 +56,22 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
     // ---------------------------------------------------------------- picking
 
     @ReactMethod
-    fun pickFile(mimeTypes: ReadableArray, promise: Promise) {
+    fun pickFile(mimeTypes: ReadableArray, promise: Promise) = startPick(mimeTypes, false, promise)
+
+    /** Same picker, but the user may choose several files. Resolves to an array. */
+    @ReactMethod
+    fun pickFiles(mimeTypes: ReadableArray, promise: Promise) = startPick(mimeTypes, true, promise)
+
+    private fun startPick(mimeTypes: ReadableArray, multiple: Boolean, promise: Promise) {
         val activity = currentActivity ?: return promise.reject("no_activity", "App is not in the foreground.")
         pickPromise = promise
+        pickMultiple = multiple
         val types = Array(mimeTypes.size()) { mimeTypes.getString(it) }
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = if (types.size == 1) types[0] else "*/*"
             if (types.size > 1) putExtra(Intent.EXTRA_MIME_TYPES, types)
+            if (multiple) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             addFlags(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or
                     Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
@@ -76,21 +88,39 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
     override fun onActivityResult(a: Activity?, requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode != PICK_REQUEST) return
         val promise = pickPromise ?: return
+        val multiple = pickMultiple
         pickPromise = null
-        val uri = data?.data
-        if (resultCode != Activity.RESULT_OK || uri == null) {
+        pickMultiple = false
+
+        // A multiple pick puts the files in clipData; choosing exactly one still
+        // arrives in data, so both have to be read whichever button was pressed.
+        val uris = mutableListOf<Uri>()
+        data?.clipData?.let { clip -> for (i in 0 until clip.itemCount) uris += clip.getItemAt(i).uri }
+        if (uris.isEmpty()) data?.data?.let { uris += it }
+
+        if (resultCode != Activity.RESULT_OK || uris.isEmpty()) {
             promise.reject("cancelled", "No file chosen.")
             return
         }
+
         // Without this the grant dies with the process and Recent files would list
         // documents it can no longer open. The system caps how many a single app may
         // hold, so a failure here is not worth failing the pick over.
-        try {
-            ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (e: Exception) {
-            // Not every provider offers a persistable grant; the file still opens now.
+        uris.forEach { uri ->
+            try {
+                ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: Exception) {
+                // Not every provider offers a persistable grant; the file still opens now.
+            }
         }
-        promise.resolve(describe(uri))
+
+        if (multiple) {
+            val list = Arguments.createArray()
+            uris.forEach { list.pushMap(describe(it)) }
+            promise.resolve(list)
+        } else {
+            promise.resolve(describe(uris.first()))
+        }
     }
 
     override fun onNewIntent(intent: Intent?) = Unit

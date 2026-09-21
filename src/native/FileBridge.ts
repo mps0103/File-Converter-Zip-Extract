@@ -31,6 +31,10 @@ export type RenderedPage = {base64: string; width: number; height: number};
 
 export type ArchiveEntryInfo = {name: string; size: number};
 
+/** What the app can write. RAR is deliberately absent — the format is proprietary
+ *  and the bundled decoder only reads. */
+export type ArchiveFormat = 'zip' | '7z' | 'tar' | 'tar.gz' | 'tar.bz2' | 'tar.xz';
+
 export type SniffedFormat =
   | 'pdf'
   | 'docx'
@@ -48,6 +52,8 @@ export type SniffedFormat =
 
 type Bridge = {
   pickFile(mimeTypes: string[]): Promise<PickedFile>;
+  /** The same picker, allowing several files at once. */
+  pickFiles(mimeTypes: string[]): Promise<PickedFile[]>;
   /** Metadata for a uri handed over by an "Open with" intent. */
   describeUri(uri: string): Promise<PickedFile>;
   /**
@@ -76,6 +82,16 @@ type ArchiveBridgeType = {
   extract(uri: string, password: string): Promise<ArchiveResult>;
   /** Table of contents only — nothing is written to Downloads. */
   listEntries(uri: string, password: string): Promise<ArchiveEntryInfo[]>;
+  /**
+   * Packs the given files into one archive in Downloads.
+   * @param password only a zip can carry one; pass '' for none.
+   */
+  createArchive(
+    uris: string[],
+    format: ArchiveFormat,
+    password: string,
+    baseName: string,
+  ): Promise<SavedFile>;
 };
 
 const missing = () => {

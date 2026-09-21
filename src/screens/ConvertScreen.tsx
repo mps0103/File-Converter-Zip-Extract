@@ -42,6 +42,9 @@ export const ConvertScreen = ({route, navigation}: Props) => {
   }, [incoming]);
 
   const isArchive = tool.id === 'extract-archive';
+  // Unpacking an archive is not converting it, and a button that says the wrong
+  // word makes the user wonder what it is about to do to their file.
+  const verb = isArchive ? 'Extract' : 'Convert';
   // A locked PDF needs the same box a protected ZIP does, or the "password
   // required" message arrives with nowhere to type one.
   const takesPassword = isArchive || tool.id.startsWith('pdf-to-');
@@ -157,7 +160,9 @@ export const ConvertScreen = ({route, navigation}: Props) => {
       ) : null}
 
       <GradientButton
-        label={files.length > 1 ? `Convert ${files.length} files` : 'Convert'}
+        label={
+          files.length > 1 ? `${verb} ${files.length} files` : verb
+        }
         colors={inkGradient[tool.ink]}
         onPress={start}
         disabled={files.length === 0 || busy}

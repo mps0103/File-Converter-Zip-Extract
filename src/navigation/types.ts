@@ -8,6 +8,8 @@ export type RootStackParamList = {
   Result: {toolId: ToolId; files: SavedFile[]; warning?: string};
   /** file is set when the app was opened from another app to view something. */
   Viewer: {file?: PickedFile};
+  /** Packing files into a new archive, rather than converting one. */
+  MakeArchive: undefined;
   Premium: undefined;
   Settings: undefined;
   History: undefined;

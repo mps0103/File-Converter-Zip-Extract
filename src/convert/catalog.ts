@@ -11,7 +11,8 @@ export type ToolId =
   | 'csv-to-excel'
   | 'excel-to-csv'
   | 'word-to-text'
-  | 'extract-archive';
+  | 'extract-archive'
+  | 'make-archive';
 
 export type Tool = {
   id: ToolId;
@@ -152,6 +153,17 @@ export const TOOLS: Tool[] = [
     ],
     group: 'Archives',
     note: 'Opens ZIP, 7Z, TAR, TAR.GZ, TGZ, GZ, BZ2, XZ and older RAR files into a folder inside Downloads. Password-protected ZIPs work once you enter the password. RAR5 archives cannot be opened.',
+  },
+  {
+    id: 'make-archive',
+    title: 'Make an archive',
+    from: 'Any files',
+    to: 'ZIP',
+    ink: 'archive',
+    accept: ['*/*'],
+    multi: true,
+    group: 'Archives',
+    note: 'Packs whatever you choose into one archive. Only a zip can carry a password — 7z and tar have no encryption this app can write.',
   },
 ];
 

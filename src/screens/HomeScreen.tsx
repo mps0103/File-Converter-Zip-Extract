@@ -27,7 +27,13 @@ export const HomeScreen = ({navigation}: Props) => {
     [group],
   );
 
-  const open = (tool: Tool) => navigation.navigate('Convert', {toolId: tool.id});
+  // Making an archive is not a conversion — it takes many files and asks for a
+  // format and a password — so it has a screen of its own rather than bending the
+  // one-file-in, one-file-out shape of the converters.
+  const open = (tool: Tool) =>
+    tool.id === 'make-archive'
+      ? navigation.navigate('MakeArchive')
+      : navigation.navigate('Convert', {toolId: tool.id});
 
   return (
     <Screen
