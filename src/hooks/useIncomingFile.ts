@@ -15,8 +15,9 @@ import {navigate} from '@/navigation/navigationRef';
  * the app is alive comes back through the same listener via onNewIntent.
  *
  * Read permission on that uri is granted to the activity that received the intent
- * and is not durable, so nothing is stored — the file is described and used
- * straight away.
+ * and is not durable. Some apps go further and mint a new single-use uri for every
+ * share, so the file is copied into this app's own storage on arrival and
+ * everything downstream — the viewer, Recent files — works from the copy.
  *
  * The format is resolved rather than read off the name. Apps that share files are
  * inconsistent about what they report: some hand over a display name with no
@@ -32,7 +33,11 @@ export const useIncomingFile = (ready: boolean) => {
     const handle = async (url: string | null) => {
       if (!url || !alive) return;
       try {
-        const file = await FileBridge.describeUri(url);
+        // Copied now, while the permission that came with the intent is still
+        // good. The uri itself is borrowed: WhatsApp and others hand over a
+        // single-use address that is dead within the hour, so anything the app
+        // remembers has to be its own copy or it is remembering a locked door.
+        const file = await FileBridge.keepIncoming(url);
         if (!alive) return;
 
         const format = await resolveFormat(file);

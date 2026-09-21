@@ -57,6 +57,12 @@ type Bridge = {
   /** Metadata for a uri handed over by an "Open with" intent. */
   describeUri(uri: string): Promise<PickedFile>;
   /**
+   * Takes a copy of a handed-over file and describes the copy, so it can still be
+   * opened after the sending app's temporary permission has lapsed. Falls back to
+   * describing the original when it is too large to be worth duplicating.
+   */
+  keepIncoming(uri: string): Promise<PickedFile>;
+  /**
    * What the file actually is, read from its first bytes. Used when the name and
    * the MIME type are both uninformative, which is common for a file handed over
    * by another app.

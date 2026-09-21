@@ -129,6 +129,80 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
      * Name, size and type for a uri the app did not pick itself — the one handed over
      * by an "Open with" intent. Read permission rides on the intent that delivered it.
      */
+    /**
+     * Copies a handed-over file into the app's own storage and describes the copy.
+     *
+     * An "Open with" uri is borrowed, not given. The sending app grants read
+     * permission for the one intent that carried it, and some apps go further:
+     * WhatsApp mints a brand new single-use uri every time a file is shared, so even
+     * the same file arrives under a different address each time. Once the grant
+     * lapses the address is dead, and Recent files — which stored it — could only
+     * answer with a permission denial, which is what it did.
+     *
+     * So the bytes are taken while they can be. Everything downstream then works
+     * from a file this app owns, and reopening it a week later is nobody else's
+     * decision.
+     *
+     * A file too large to be worth duplicating is described where it lies. It opens
+     * now, and if it is gone from Recent files later, that is the better trade
+     * against filling the phone.
+     */
+    @ReactMethod
+    fun keepIncoming(uriString: String, promise: Promise) {
+        try {
+            val uri = Uri.parse(uriString)
+            val described = describe(uri)
+            val size = described.getDouble("size").toLong()
+
+            if (size > MAX_KEPT_BYTES) return promise.resolve(described)
+
+            val dir = File(ctx.filesDir, "incoming").apply { mkdirs() }
+            prune(dir)
+
+            val name = described.getString("name") ?: "file"
+            val copy = File(dir, "${System.currentTimeMillis()}_${name.takeLast(80)}")
+            ctx.contentResolver.openInputStream(uri).use { input ->
+                FileOutputStream(copy).use { out ->
+                    input?.copyTo(out, DEFAULT_BUFFER_SIZE)
+                        ?: throw IllegalStateException("That file could not be read.")
+                }
+            }
+
+            promise.resolve(
+                Arguments.createMap().apply {
+                    putString("uri", Uri.fromFile(copy).toString())
+                    putString("name", name)
+                    putDouble("size", copy.length().toDouble())
+                    putString("mime", described.getString("mime") ?: "application/octet-stream")
+                },
+            )
+        } catch (e: Exception) {
+            // Failing to copy is not failing to open. Fall back to the borrowed uri,
+            // which still works for as long as the grant does.
+            try {
+                promise.resolve(describe(Uri.parse(uriString)))
+            } catch (inner: Exception) {
+                promise.reject("describe_failed", inner.message ?: "That file could not be read.")
+            }
+        }
+    }
+
+    /**
+     * Keeps the copies from growing without end: anything older than a month goes,
+     * and then the oldest go until the folder is back under its limit. Recent files
+     * shows a short list, so a copy nobody can reach from it is only taking up room.
+     */
+    private fun prune(dir: File) {
+        val files = dir.listFiles()?.sortedBy { it.lastModified() } ?: return
+        val cutoff = System.currentTimeMillis() - KEEP_FOR_MS
+        var total = files.sumOf { it.length() }
+        for (file in files) {
+            if (total <= MAX_FOLDER_BYTES && file.lastModified() >= cutoff) break
+            total -= file.length()
+            file.delete()
+        }
+    }
+
     @ReactMethod
     fun describeUri(uriString: String, promise: Promise) {
         try {
@@ -504,5 +578,13 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
 
     companion object {
         private const val PICK_REQUEST = 7341
+
+        /** Past this, a handed-over file is read where it lies rather than duplicated. */
+        private const val MAX_KEPT_BYTES = 256L * 1024 * 1024
+
+        /** How much the kept copies may occupy in total. */
+        private const val MAX_FOLDER_BYTES = 512L * 1024 * 1024
+
+        private const val KEEP_FOR_MS = 30L * 24 * 60 * 60 * 1000
     }
 }
