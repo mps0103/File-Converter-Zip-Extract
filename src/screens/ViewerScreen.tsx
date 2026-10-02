@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useState} from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import {WebView} from 'react-native-webview';
+import {Gesture, GestureDetector, GestureHandlerRootView} from 'react-native-gesture-handler';
+import Animated, {useAnimatedStyle, useSharedValue, withTiming} from 'react-native-reanimated';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {Screen} from '@/components/Screen';
@@ -84,6 +87,147 @@ const PdfPage = ({
   return <Image source={{uri: src}} style={[styles.page, {width, height: width * ratio}]} resizeMode="contain" />;
 };
 
+/**
+ * One page on its own, where it can be pinched about.
+ *
+ * A page in the list cannot do this: it sits inside the screen's vertical scroll,
+ * and a pinch or a drag there is a fight between the two about whose gesture it
+ * is. Opening the page on its own leaves nothing to argue with — which is also
+ * why every PDF reader does it this way.
+ *
+ * The page is drawn again at three times the screen width rather than reusing the
+ * thumbnail, because zooming into an image rendered for a phone screen only makes
+ * the blur bigger.
+ */
+const PageZoom = ({
+  uri,
+  index,
+  pageCount,
+  password,
+  onClose,
+}: {
+  uri: string;
+  index: number;
+  pageCount: number;
+  password: string;
+  onClose: () => void;
+}) => {
+  const {width, height} = useWindowDimensions();
+  const [src, setSrc] = useState<string | null>(null);
+  const [ratio, setRatio] = useState(1.414);
+
+  useEffect(() => {
+    let alive = true;
+    FileBridge.renderPdfPage(uri, index, Math.round(width * 3), password)
+      .then(page => {
+        if (!alive) return;
+        setSrc(`data:image/png;base64,${page.base64}`);
+        setRatio(page.height / page.width);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [uri, index, width, password]);
+
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const x = useSharedValue(0);
+  const y = useSharedValue(0);
+  const savedX = useSharedValue(0);
+  const savedY = useSharedValue(0);
+
+  const shown = {width, height: Math.min(height, width * ratio)};
+
+  // Keeps the page from being flung off screen: it may be dragged by however much
+  // of it is hanging outside the window at the current zoom, and no further.
+  const clamp = (value: number, limit: number) => {
+    'worklet';
+    return Math.min(limit, Math.max(-limit, value));
+  };
+
+  const reset = () => {
+    'worklet';
+    scale.value = withTiming(1);
+    savedScale.value = 1;
+    x.value = withTiming(0);
+    y.value = withTiming(0);
+    savedX.value = 0;
+    savedY.value = 0;
+  };
+
+  const pinch = Gesture.Pinch()
+    .onUpdate(e => {
+      scale.value = Math.min(6, Math.max(1, savedScale.value * e.scale));
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+      if (scale.value <= 1.01) reset();
+    });
+
+  const pan = Gesture.Pan()
+    .averageTouches(true)
+    .onUpdate(e => {
+      if (scale.value <= 1) return;
+      const maxX = ((scale.value - 1) * shown.width) / 2;
+      const maxY = ((scale.value - 1) * shown.height) / 2;
+      x.value = clamp(savedX.value + e.translationX, maxX);
+      y.value = clamp(savedY.value + e.translationY, maxY);
+    })
+    .onEnd(() => {
+      savedX.value = x.value;
+      savedY.value = y.value;
+    });
+
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (scale.value > 1.01) {
+        reset();
+      } else {
+        scale.value = withTiming(3);
+        savedScale.value = 3;
+      }
+    });
+
+  const gesture = Gesture.Simultaneous(pinch, pan, doubleTap);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{translateX: x.value}, {translateY: y.value}, {scale: scale.value}],
+  }));
+
+  return (
+    <Modal visible transparent={false} animationType="fade" onRequestClose={onClose}>
+      {/*
+        A Modal is a separate native window, and the GestureHandlerRootView wrapping
+        the app does not reach inside it — which is why the page appeared but would
+        not pinch. The modal needs a root of its own.
+      */}
+      <GestureHandlerRootView style={styles.zoomRoot}>
+        <GestureDetector gesture={gesture}>
+          <Animated.View style={[styles.zoomStage, style]}>
+            {src ? (
+              <Image source={{uri: src}} style={shown} resizeMode="contain" />
+            ) : (
+              <ActivityIndicator color="#FFFFFF" />
+            )}
+          </Animated.View>
+        </GestureDetector>
+
+        <View style={styles.zoomBar}>
+          <Text style={styles.zoomLabel}>
+            Page {index + 1} of {pageCount}
+          </Text>
+          <Pressable onPress={onClose} hitSlop={14}>
+            <Text style={styles.zoomClose}>Done</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.zoomHint}>Pinch to zoom · double tap to fit</Text>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+};
+
 export const ViewerScreen = ({route, navigation}: Props) => {
   const {width} = useWindowDimensions();
   const [file, setFile] = useState<PickedFile | null>(route.params?.file ?? null);
@@ -91,6 +235,8 @@ export const ViewerScreen = ({route, navigation}: Props) => {
   // Which sheet of a workbook is on screen. Reset whenever a new file is opened,
   // or sheet three of the last file would be asked for in a file with one.
   const [sheet, setSheet] = useState(0);
+  // The page opened on its own to be zoomed, or null when the list is on screen.
+  const [zoomPage, setZoomPage] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -262,14 +408,24 @@ export const ViewerScreen = ({route, navigation}: Props) => {
     if (preview.kind === 'pdf') {
       return (
         <View style={styles.pages}>
+          <Text style={styles.zoomTip}>Tap a page to zoom in</Text>
           {Array.from({length: preview.pageCount}, (_, i) => (
-            <View key={i}>
+            <Pressable key={i} onPress={() => setZoomPage(i)}>
               <Text style={styles.pageLabel}>
                 Page {i + 1} of {preview.pageCount}
               </Text>
               <PdfPage uri={file.uri} index={i} width={pageWidth} password={password} />
-            </View>
+            </Pressable>
           ))}
+          {zoomPage !== null ? (
+            <PageZoom
+              uri={file.uri}
+              index={zoomPage}
+              pageCount={preview.pageCount}
+              password={password}
+              onClose={() => setZoomPage(null)}
+            />
+          ) : null}
         </View>
       );
     }
@@ -421,6 +577,29 @@ const styles = StyleSheet.create({
   pressed: {opacity: 0.85},
   pages: {gap: space.lg},
   page: {borderRadius: radius.chip, backgroundColor: '#FFFFFF'},
+  zoomTip: {...type.caption, color: palette.inkFaint, textAlign: 'center', marginBottom: space.sm},
+  zoomRoot: {flex: 1, backgroundColor: '#101018', alignItems: 'center', justifyContent: 'center'},
+  zoomStage: {alignItems: 'center', justifyContent: 'center'},
+  zoomBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: space.xl,
+    paddingTop: space.xxl,
+    paddingBottom: space.md,
+  },
+  zoomLabel: {...type.caption, color: 'rgba(255,255,255,0.75)'},
+  zoomClose: {...type.section, color: '#FFFFFF'},
+  zoomHint: {
+    position: 'absolute',
+    bottom: space.xxl,
+    ...type.caption,
+    color: 'rgba(255,255,255,0.5)',
+  },
   pageFallback: {
     borderRadius: radius.chip,
     backgroundColor: palette.surface,
