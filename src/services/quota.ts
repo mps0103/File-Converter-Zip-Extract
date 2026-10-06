@@ -5,11 +5,10 @@ import {getCredits, spendCredit} from './credits';
  * Conversions a new user gets before the paywall appears. Extracting an archive
  * counts as one; viewing never does, because the viewer is free.
  *
- * Raised from 10 to 50 for the testing period, so the app can be used properly
- * before the limit is met. Every screen that mentions the allowance reads it from
- * here, so lowering it again is this one line.
+ * The free allowance is kept intentionally low for testing and promotion, and
+ * every screen that mentions the allowance reads it from here.
  */
-export const FREE_CONVERSIONS = 50;
+export const FREE_CONVERSIONS = 10;
 
 export const getUsed = () => store.read<number>(KEYS.used, 0);
 

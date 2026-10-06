@@ -32,8 +32,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
 
         // Bump both together at the end of a batch of changes, before every Play upload.
-        versionCode 5
-        versionName "1.0.4"
+        versionCode 6
+        versionName "1.0.5"
 
         multiDexEnabled true
         resourceConfigurations += ["en"]
