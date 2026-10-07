@@ -1,4 +1,7 @@
 {
   "name": "FileConverterByMPS",
-  "displayName": "File Converter & Zip Extract"
+  "displayName": "File Converter & Zip Extract",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-2904788540387890~2300166132"
+  }
 }
