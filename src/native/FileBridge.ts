@@ -27,7 +27,16 @@ export type ArchiveResult = {
 
 export type ArchiveProgress = {stage: string; done: number; total: number};
 
-export type RenderedPage = {base64: string; width: number; height: number};
+/**
+ * A page that has been drawn, as a file uri into the app's cache.
+ *
+ * It used to be base64. A page crossing the bridge as text meant the same picture
+ * existed four times over at that moment — the bitmap, the PNG bytes, the base64
+ * string a third longer again, and the copy React Native decoded to show it — and
+ * the string stayed in JavaScript for as long as the page was on screen. A file
+ * costs one decoded copy, and that copy is the only one Android can reclaim.
+ */
+export type RenderedPage = {uri: string; width: number; height: number};
 
 export type ArchiveEntryInfo = {name: string; size: number};
 
@@ -72,7 +81,10 @@ type Bridge = {
   saveToDownloads(base64: string, fileName: string, mime: string): Promise<SavedFile>;
   /** password is '' for an ordinary PDF and the key for a locked one. */
   extractPdfText(uri: string, password: string): Promise<PdfText>;
-  /** Page image for the viewer, drawn by the framework's PdfRenderer. */
+  /**
+   * Page image for the viewer, drawn by the framework's PdfRenderer into a cache
+   * file. targetWidth is in pixels and is clamped natively to 1600.
+   */
   renderPdfPage(
     uri: string,
     index: number,
@@ -80,6 +92,8 @@ type Bridge = {
     password: string,
   ): Promise<RenderedPage>;
   pdfPageCount(uri: string, password: string): Promise<number>;
+  /** Throws away the drawn pages. Called when the viewer closes. */
+  clearPdfPageCache(): Promise<boolean>;
   openFile(uri: string, mime: string): Promise<boolean>;
   shareFile(uri: string, mime: string): Promise<boolean>;
 };

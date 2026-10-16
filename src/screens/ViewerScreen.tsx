@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -10,6 +10,8 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import {WebView} from 'react-native-webview';
 import {Gesture, GestureDetector, GestureHandlerRootView} from 'react-native-gesture-handler';
@@ -24,6 +26,7 @@ import {toolById} from '@/convert/catalog';
 import {convert} from '@/convert/engine';
 import {maybeShowInterstitial} from '@/services/ads';
 import {useApp} from '@/hooks/AppState';
+import {useInBackground} from '@/hooks/useInBackground';
 import {ProgressRing, RING_SETTLE_MS} from '@/components/ProgressRing';
 import {AppDialog} from '@/components/AppDialog';
 import {QuotaGate} from '@/components/QuotaGate';
@@ -40,39 +43,86 @@ const formatSize = (bytes: number) => {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 };
 
-/** One page of a PDF, drawn natively and only once it is needed. */
+/**
+ * How many pages either side of the screen keep a drawn image.
+ *
+ * A page is a few megabytes of decoded bitmap, so this number is the viewer's
+ * memory ceiling: nine pages at a phone's page size is tens of megabytes, and it
+ * does not matter whether the document is ten pages or a thousand. It used to be
+ * every page at once, which on a long PDF was hundreds of megabytes and, often
+ * enough, an out-of-memory kill.
+ *
+ * Four either side is enough that a page is drawn well before a normal scroll
+ * reaches it.
+ */
+const PAGE_WINDOW = 4;
+
+/** How long a page must stay near the screen before it is worth drawing. */
+const RENDER_SETTLE_MS = 120;
+
+/** The proportions of A4, used for a page whose real shape is not yet known. */
+const DEFAULT_RATIO = 1.414;
+
+/**
+ * One page of a PDF, drawn natively and only while it is near the screen.
+ *
+ * `active` is the whole memory story. While it is true the page holds an Image;
+ * when it goes false the Image is dropped and Android is free to reclaim the
+ * bitmap. The placeholder keeps the page's measured height either way, so letting
+ * go of an image never moves the scroll under the user's thumb.
+ *
+ * The settle delay means a fling costs nothing: pages swept past are marked active
+ * and inactive again long before their timer fires, so nothing is drawn for them.
+ *
+ * Drawing is cheap to repeat. The native side writes each page to a PNG in the
+ * cache and hands back its file uri, so a page scrolled back to is a disk read
+ * rather than a re-render.
+ */
 const PdfPage = ({
   uri,
   index,
   width,
   password,
+  active,
 }: {
   uri: string;
   index: number;
   width: number;
   password: string;
+  active: boolean;
 }) => {
   const [src, setSrc] = useState<string | null>(null);
-  const [ratio, setRatio] = useState(1.414);
+  const [ratio, setRatio] = useState(DEFAULT_RATIO);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (!active) {
+      // The point of the whole exercise. Everything else here is bookkeeping.
+      setSrc(null);
+      return;
+    }
     let alive = true;
-    FileBridge.renderPdfPage(uri, index, Math.round(width * 2), password)
-      .then(page => {
-        if (!alive) return;
-        setSrc(`data:image/png;base64,${page.base64}`);
-        setRatio(page.height / page.width);
-      })
-      .catch(() => alive && setFailed(true));
+    const timer = setTimeout(() => {
+      // Twice the width in dp, which on a three-times-density phone is about
+      // two thirds of the screen's real pixels — under the ceiling a page is
+      // allowed, and the size this viewer has always drawn.
+      FileBridge.renderPdfPage(uri, index, Math.round(width * 2), password)
+        .then(page => {
+          if (!alive) return;
+          setRatio(page.height / page.width);
+          setSrc(page.uri);
+        })
+        .catch(() => alive && setFailed(true));
+    }, RENDER_SETTLE_MS);
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [uri, index, width, password]);
+  }, [uri, index, width, password, active]);
 
   if (failed) {
     return (
-      <View style={[styles.pageFallback, {width, height: width * 1.414}]}>
+      <View style={[styles.pageFallback, {width, height: width * DEFAULT_RATIO}]}>
         <Text style={styles.muted}>Page {index + 1} could not be drawn.</Text>
       </View>
     );
@@ -80,11 +130,13 @@ const PdfPage = ({
   if (!src) {
     return (
       <View style={[styles.pageFallback, {width, height: width * ratio}]}>
-        <ActivityIndicator color={palette.inkFaint} />
+        {active ? <ActivityIndicator color={palette.inkFaint} /> : null}
       </View>
     );
   }
-  return <Image source={{uri: src}} style={[styles.page, {width, height: width * ratio}]} resizeMode="contain" />;
+  return (
+    <Image source={{uri: src}} style={[styles.page, {width, height: width * ratio}]} resizeMode="contain" />
+  );
 };
 
 /**
@@ -114,19 +166,23 @@ const PageZoom = ({
 }) => {
   const {width, height} = useWindowDimensions();
   const [src, setSrc] = useState<string | null>(null);
-  const [ratio, setRatio] = useState(1.414);
+  const [ratio, setRatio] = useState(DEFAULT_RATIO);
 
   useEffect(() => {
     let alive = true;
+    // Three times the width in dp, which the native side clamps to 1600 px. That
+    // is about twice a phone screen in real pixels — the most a six-times pinch
+    // can resolve, and a 14 MB bitmap rather than the 22 MB a 2000 px page cost.
     FileBridge.renderPdfPage(uri, index, Math.round(width * 3), password)
       .then(page => {
         if (!alive) return;
-        setSrc(`data:image/png;base64,${page.base64}`);
+        setSrc(page.uri);
         setRatio(page.height / page.width);
       })
       .catch(() => {});
     return () => {
       alive = false;
+      setSrc(null);
     };
   }, [uri, index, width, password]);
 
@@ -246,6 +302,91 @@ export const ViewerScreen = ({route, navigation}: Props) => {
   const [percent, setPercent] = useState(0);
   const [stage, setStage] = useState('');
   const [gate, setGate] = useState(false);
+  const away = useInBackground();
+
+  /**
+   * Which pages hold a drawn image.
+   *
+   * Kept as state because the pages have to re-render when it changes, but written
+   * to only when the window actually moves — a scroll fires many times a second
+   * and re-rendering a page list on every one of them would cost more than the
+   * memory this saves.
+   */
+  const [pageWindow, setPageWindow] = useState({from: 0, to: PAGE_WINDOW});
+  // Each page's top and height in the scroll view, filled in by onLayout. A page
+  // that has not been laid out yet is simply not in here, and the window falls back
+  // to counting from the top, which is where the viewer opens anyway.
+  const pageBox = useRef<Array<{top: number; height: number}>>([]);
+  const viewport = useRef({top: 0, height: 0});
+  // onLayout reports a page's position inside the list, while a scroll reports an
+  // offset into the whole scroll view. The list does not start at the top of the
+  // scroll view — there is a "choose a different file" button above it — so the
+  // two are in different coordinates until this is added.
+  const pagesTop = useRef(0);
+
+  const measureWindow = useCallback(() => {
+    const {top, height} = viewport.current;
+    const boxes = pageBox.current;
+    let first = 0;
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      if (!box) continue;
+      if (pagesTop.current + box.top + box.height >= top) {
+        first = i;
+        break;
+      }
+    }
+    let last = first;
+    for (let i = first; i < boxes.length; i++) {
+      const box = boxes[i];
+      if (!box) break;
+      last = i;
+      if (pagesTop.current + box.top > top + height) break;
+    }
+    const next = {from: Math.max(0, first - PAGE_WINDOW), to: last + PAGE_WINDOW};
+    setPageWindow(current =>
+      current.from === next.from && current.to === next.to ? current : next,
+    );
+  }, []);
+
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      viewport.current = {
+        top: e.nativeEvent.contentOffset.y,
+        height: e.nativeEvent.layoutMeasurement.height,
+      };
+      measureWindow();
+    },
+    [measureWindow],
+  );
+
+  const onPageLayout = useCallback(
+    (index: number, top: number, height: number) => {
+      pageBox.current[index] = {top, height};
+      measureWindow();
+    },
+    [measureWindow],
+  );
+
+  // A new document means the old page measurements describe nothing. Left behind,
+  // a three-page file would still be carrying the geometry of the two-hundred-page
+  // one before it.
+  useEffect(() => {
+    pageBox.current = [];
+    pagesTop.current = 0;
+    viewport.current = {top: 0, height: 0};
+    setPageWindow({from: 0, to: PAGE_WINDOW});
+  }, [file?.uri, preview]);
+
+  // The rendered pages are a cache, and this screen is the only thing that uses
+  // them. Dropping them on the way out keeps a long document from leaving a few
+  // hundred megabytes of PNGs behind in cacheDir.
+  useEffect(
+    () => () => {
+      FileBridge.clearPdfPageCache().catch(() => {});
+    },
+    [],
+  );
 
   const load = useCallback(async (target: PickedFile, pass = '') => {
     setBusy(true);
@@ -407,14 +548,33 @@ export const ViewerScreen = ({route, navigation}: Props) => {
 
     if (preview.kind === 'pdf') {
       return (
-        <View style={styles.pages}>
+        <View
+          style={styles.pages}
+          onLayout={e => {
+            pagesTop.current = e.nativeEvent.layout.y;
+            measureWindow();
+          }}>
           <Text style={styles.zoomTip}>Tap a page to zoom in</Text>
           {Array.from({length: preview.pageCount}, (_, i) => (
-            <Pressable key={i} onPress={() => setZoomPage(i)}>
+            <Pressable
+              key={i}
+              onPress={() => setZoomPage(i)}
+              onLayout={e =>
+                onPageLayout(i, e.nativeEvent.layout.y, e.nativeEvent.layout.height)
+              }>
               <Text style={styles.pageLabel}>
                 Page {i + 1} of {preview.pageCount}
               </Text>
-              <PdfPage uri={file.uri} index={i} width={pageWidth} password={password} />
+              <PdfPage
+                uri={file.uri}
+                index={i}
+                width={pageWidth}
+                password={password}
+                // Near the screen, and the app still on it. Away covers both the
+                // user leaving and Android asking for memory back, and a page that
+                // is not active holds no image at all.
+                active={!away && zoomPage === null && i >= pageWindow.from && i <= pageWindow.to}
+              />
             </Pressable>
           ))}
           {zoomPage !== null ? (
@@ -475,6 +635,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
             source={{html: active.html}}
             style={styles.web}
             javaScriptEnabled={false}
+            cacheEnabled={false}
             // Pinch to zoom, so a wide sheet can be pulled back far enough to read.
             setBuiltInZoomControls
             setDisplayZoomControls={false}
@@ -512,6 +673,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
           style={styles.web}
           // No script at all. A .html file arriving from a chat is rendered inert.
           javaScriptEnabled={false}
+          cacheEnabled={false}
           setSupportMultipleWindows={false}
           // Nothing in a preview should be able to reach the network or leave the page.
           onShouldStartLoadWithRequest={req => req.url === 'about:blank' || req.url.startsWith('data:')}
@@ -527,6 +689,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
       title="View a file"
       subtitle={file ? file.name : 'Read it without converting it'}
       scroll={preview?.kind !== 'html' && preview?.kind !== 'sheet'}
+      onScroll={onScroll}
       footer={<AdBanner />}>
       {file ? (
         <Pressable onPress={pick} style={styles.swap}>

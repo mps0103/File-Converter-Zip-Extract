@@ -32,8 +32,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
 
         // Bump both together at the end of a batch of changes, before every Play upload.
-        versionCode 7
-        versionName "1.0.6"
+        versionCode 8
+        versionName "1.0.7"
 
         multiDexEnabled true
         resourceConfigurations += ["en"]
@@ -127,6 +127,11 @@ dependencies {
     // API level this app supports.
     implementation "androidx.activity:activity-ktx:1.9.3"
     implementation "androidx.multidex:multidex:2.0.1"
+
+    // React Native's image cache. Named explicitly, at the version React Native
+    // itself resolves, because MainApplication caps its bitmap memory rather than
+    // leaving it at a quarter of the heap.
+    implementation "com.facebook.fresco:fresco:3.4.0"
 
     // Google Play billing, talked to directly by BillingModule.kt. Play requires 8.x.
     implementation "com.android.billingclient:billing-ktx:8.0.0"

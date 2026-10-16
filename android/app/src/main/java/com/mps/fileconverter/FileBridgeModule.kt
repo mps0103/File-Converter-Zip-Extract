@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -238,12 +239,36 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
      * app carries no extra rendering library. The document is copied to the cache
      * first because PdfRenderer needs a seekable file descriptor, which a content
      * uri from a cloud provider does not always give.
+     *
+     * The page goes to a PNG in the cache and only its file uri crosses the bridge.
+     * It used to cross as base64, which meant one page was held four times over at
+     * the same moment: the bitmap here, the PNG bytes, a base64 string a third
+     * longer again, and then the copy React Native decoded for the Image. A file
+     * costs one of those, and the one it costs — the decoded bitmap — is the only
+     * one Android can evict under pressure.
+     *
+     * An already-rendered page is handed straight back. Rendering is what costs,
+     * not the few hundred kB on disk, and cacheDir is cleared by Android under
+     * storage pressure and by clearPdfPageCache when the viewer closes.
      */
     @ReactMethod
     fun renderPdfPage(uriString: String, index: Int, targetWidth: Int, password: String, promise: Promise) {
         var descriptor: ParcelFileDescriptor? = null
         var renderer: PdfRenderer? = null
         try {
+            val width = targetWidth.coerceIn(320, MAX_PAGE_PX)
+            val pages = File(ctx.cacheDir, PAGE_DIR).apply { mkdirs() }
+            val out = File(pages, "p" + uriString.hashCode() + "_" + index + "_" + width + ".png")
+            if (out.exists() && out.length() > 0) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(out.absolutePath, bounds)
+                if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                    promise.resolve(pageResult(out, bounds.outWidth, bounds.outHeight))
+                    return
+                }
+                out.delete()
+            }
+
             val cached = cachePdf(Uri.parse(uriString), password)
             descriptor = ParcelFileDescriptor.open(cached, ParcelFileDescriptor.MODE_READ_ONLY)
             renderer = PdfRenderer(descriptor)
@@ -252,21 +277,23 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
                 return
             }
             renderer.openPage(index).use { page ->
-                val width = targetWidth.coerceIn(320, 2000)
                 val height = (width.toFloat() * page.height / page.width).toInt().coerceAtLeast(1)
                 val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                // A page is transparent wherever nothing is drawn, so it needs a white
-                // ground or the text lands on whatever is behind the image.
-                bitmap.eraseColor(Color.WHITE)
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                val out = java.io.ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                bitmap.recycle()
-                val map = Arguments.createMap()
-                map.putString("base64", Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP))
-                map.putInt("width", width)
-                map.putInt("height", height)
-                promise.resolve(map)
+                try {
+                    // A page is transparent wherever nothing is drawn, so it needs a
+                    // white ground or the text lands on whatever is behind the image.
+                    bitmap.eraseColor(Color.WHITE)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    FileOutputStream(out).use { file ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, file)
+                    }
+                } finally {
+                    // Before the promise resolves, not after: the bitmap is the
+                    // largest thing this method holds and JS must never be able to
+                    // ask for the next page while this one is still in memory.
+                    bitmap.recycle()
+                }
+                promise.resolve(pageResult(out, width, height))
             }
         } catch (e: PasswordRequired) {
             promise.reject("password", e.message)
@@ -275,6 +302,24 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
         } finally {
             try { renderer?.close() } catch (_: Exception) {}
             try { descriptor?.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun pageResult(file: File, width: Int, height: Int): WritableMap =
+        Arguments.createMap().apply {
+            putString("uri", Uri.fromFile(file).toString())
+            putInt("width", width)
+            putInt("height", height)
+        }
+
+    /** Drops the rendered pages. Called when the viewer closes. */
+    @ReactMethod
+    fun clearPdfPageCache(promise: Promise) {
+        try {
+            File(ctx.cacheDir, PAGE_DIR).listFiles()?.forEach { it.delete() }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.resolve(false) // A cache that would not clear is not worth an error.
         }
     }
 
@@ -577,6 +622,14 @@ class FileBridgeModule(private val ctx: ReactApplicationContext) :
     }
 
     companion object {
+        /**
+         * The widest a page is ever drawn. 2000 px of ARGB_8888 at A4 proportions is
+         * a 22 MB bitmap; 1600 is 14 MB and is still more than twice the pixels a
+         * phone screen has, which is the most a 6x pinch can show.
+         */
+        private const val MAX_PAGE_PX = 1600
+        private const val PAGE_DIR = "pdf-pages"
+
         private const val PICK_REQUEST = 7341
 
         /** Past this, a handed-over file is read where it lies rather than duplicated. */

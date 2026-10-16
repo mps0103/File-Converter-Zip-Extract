@@ -1,5 +1,13 @@
 import React from 'react';
-import {ScrollView, StatusBar, StyleSheet, Text, View} from 'react-native';
+import {
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {palette, space, type} from '@/theme';
 
@@ -22,10 +30,24 @@ type Props = {
   right?: React.ReactNode;
   scroll?: boolean;
   footer?: React.ReactNode;
+  /**
+   * Scroll position, for a screen that needs to know which of its children are in
+   * front of the user. The viewer uses it to hold rendered PDF pages only near the
+   * screen; everything else can ignore it.
+   */
+  onScroll?: (e: NativeSyntheticEvent<NativeScrollEvent>) => void;
   children: React.ReactNode;
 };
 
-export const Screen = ({title, subtitle, right, scroll = true, footer, children}: Props) => {
+export const Screen = ({
+  title,
+  subtitle,
+  right,
+  scroll = true,
+  footer,
+  onScroll,
+  children,
+}: Props) => {
   const Body: any = scroll ? ScrollView : View;
   const insets = useSafeAreaInsets();
   // The bottom edge is left off SafeAreaView so a footer can paint its own background
@@ -55,6 +77,8 @@ export const Screen = ({title, subtitle, right, scroll = true, footer, children}
             ? [styles.content, styles.centred, {paddingBottom: space.xxl + bodyInset}]
             : undefined
         }
+        onScroll={scroll ? onScroll : undefined}
+        scrollEventThrottle={64}
         showsVerticalScrollIndicator={false}>
         {children}
       </Body>
