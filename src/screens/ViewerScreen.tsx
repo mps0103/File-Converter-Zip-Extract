@@ -741,7 +741,7 @@ const useStyles = makeStyles(palette => StyleSheet.create({
     color: palette.ink,
   },
   action: {backgroundColor: palette.ink, borderRadius: radius.pill, paddingVertical: space.md, alignItems: 'center'},
-  actionText: {...type.section, color: '#FFFFFF'},
+  actionText: {...type.section, color: palette.canvas},
   pressed: {opacity: 0.85},
   pages: {gap: space.lg},
   page: {borderRadius: radius.chip, backgroundColor: '#FFFFFF'},

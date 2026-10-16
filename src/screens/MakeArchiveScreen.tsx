@@ -315,7 +315,7 @@ const useStyles = makeStyles(palette => StyleSheet.create({
   },
   chipOn: {backgroundColor: palette.ink, borderColor: palette.ink},
   chipText: {...type.caption, color: palette.inkSoft},
-  chipTextOn: {color: '#FFFFFF'},
+  chipTextOn: {color: palette.canvas},
   formatHint: {...type.caption, color: palette.inkFaint},
   input: {
     borderWidth: 1,
@@ -335,7 +335,7 @@ const useStyles = makeStyles(palette => StyleSheet.create({
   // stranger to the rest of the app.
   busy: {
     flex: 1,
-    backgroundColor: 'rgba(246,245,251,0.96)',
+    backgroundColor: palette.canvasVeil,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.lg,

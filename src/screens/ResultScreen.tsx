@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import React, {useCallback, useEffect} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import Animated, {
   FadeInDown,
@@ -17,6 +17,7 @@ import {FileGlyph} from '@/components/FileGlyph';
 import {GradientButton} from '@/components/GradientButton';
 import {toolById} from '@/convert/catalog';
 import {FileBridge} from '@/native/FileBridge';
+import {previewKindFor} from '@/convert/preview';
 import {makeStyles, radius, shadow, space, type, useTheme} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
@@ -28,6 +29,24 @@ export const ResultScreen = ({route, navigation}: Props) => {
   const {files, warning} = route.params;
   const tool = toolById(route.params.toolId);
   const first = files[0];
+
+  /**
+   * Anything the app can read opens in its own viewer.
+   *
+   * Sending it to the system chooser instead put an "Open with" sheet in front of
+   * a user who had just converted a file inside this app, and asked them to pick
+   * an app for a job this one does. Formats the viewer does not know — an image,
+   * say — still go out to whatever handles them. Recent files has worked this way
+   * for a while; this is the same rule, in the one place that had been missed.
+   */
+  const open = useCallback(() => {
+    const file = {uri: first.uri, name: first.name, mime: first.mime, size: 0};
+    if (previewKindFor(file) !== 'unsupported') {
+      navigation.navigate('Viewer', {file});
+      return;
+    }
+    FileBridge.openFile(first.uri, first.mime);
+  }, [first, navigation]);
 
   const pop = useSharedValue(0);
   useEffect(() => {
@@ -88,7 +107,7 @@ export const ResultScreen = ({route, navigation}: Props) => {
       <GradientButton
         label="Open file"
         colors={inkGradient[tool.ink]}
-        onPress={() => FileBridge.openFile(first.uri, first.mime)}
+        onPress={open}
         style={styles.cta}
       />
       <GradientButton

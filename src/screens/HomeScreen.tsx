@@ -114,7 +114,7 @@ const useStyles = makeStyles(palette => StyleSheet.create({
   },
   filterActive: {backgroundColor: palette.ink, borderColor: palette.ink},
   filterText: {...type.caption, color: palette.inkSoft},
-  filterTextActive: {color: '#FFFFFF'},
+  filterTextActive: {color: palette.canvas},
   grid: {flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -space.sm / 2},
   cell: {paddingHorizontal: space.sm / 2, paddingBottom: space.md},
   links: {flexDirection: 'row', gap: space.md, marginTop: space.sm},

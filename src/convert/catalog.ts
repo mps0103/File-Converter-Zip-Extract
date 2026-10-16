@@ -31,10 +31,32 @@ export type Tool = {
   capture?: boolean;
   /** Shown on the tool screen. Says plainly what survives the conversion. */
   note: string;
-  group: 'From PDF' | 'To PDF' | 'Documents & sheets' | 'Archives';
+  group: 'Scan & pictures' | 'From PDF' | 'To PDF' | 'Documents & sheets' | 'Archives';
 };
 
 export const TOOLS: Tool[] = [
+  {
+    id: 'scan-to-pdf',
+    title: 'Scan to PDF',
+    from: 'Camera',
+    to: 'PDF',
+    ink: 'pdf',
+    accept: [],
+    capture: true,
+    group: 'Scan & pictures',
+    note: 'Finds the edges of the page, straightens it and cleans it up. Add as many pages as you need, then save them as one PDF. The scanner comes from Google Play services, so the app never needs the camera itself.',
+  },
+  {
+    id: 'image-to-pdf',
+    title: 'Images to PDF',
+    from: 'JPG / PNG',
+    to: 'PDF',
+    ink: 'pdf',
+    accept: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/*'],
+    multi: true,
+    group: 'Scan & pictures',
+    note: 'One picture per A4 page, in the order you add them. Pictures are scaled to print size, so a PDF of camera photos stays small enough to email.',
+  },
   {
     id: 'pdf-to-word',
     title: 'PDF to Word',
@@ -110,28 +132,6 @@ export const TOOLS: Tool[] = [
     note: 'Clean typeset pages with automatic page breaks.',
   },
   {
-    id: 'image-to-pdf',
-    title: 'Images to PDF',
-    from: 'JPG / PNG',
-    to: 'PDF',
-    ink: 'pdf',
-    accept: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/*'],
-    multi: true,
-    group: 'To PDF',
-    note: 'One picture per A4 page, in the order you add them. Pictures are scaled to print size, so a PDF of camera photos stays small enough to email.',
-  },
-  {
-    id: 'scan-to-pdf',
-    title: 'Scan to PDF',
-    from: 'Camera',
-    to: 'PDF',
-    ink: 'pdf',
-    accept: [],
-    capture: true,
-    group: 'To PDF',
-    note: 'Finds the edges of the page, straightens it and cleans it up. Add as many pages as you need, then save them as one PDF. The scanner comes from Google Play services, so the app never needs the camera itself.',
-  },
-  {
     id: 'csv-to-excel',
     title: 'CSV to Excel',
     from: 'CSV',
@@ -196,7 +196,13 @@ export const TOOLS: Tool[] = [
   },
 ];
 
-export const GROUPS: Tool['group'][] = ['From PDF', 'To PDF', 'Documents & sheets', 'Archives'];
+export const GROUPS: Tool['group'][] = [
+  'Scan & pictures',
+  'From PDF',
+  'To PDF',
+  'Documents & sheets',
+  'Archives',
+];
 
 export const toolById = (id: ToolId) => TOOLS.find(t => t.id === id)!;
 

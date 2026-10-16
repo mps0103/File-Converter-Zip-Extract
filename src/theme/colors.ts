@@ -20,6 +20,13 @@ export type Palette = {
   inkFaint: string;
   hairline: string;
   overlay: string;
+  /**
+   * The canvas at 96%, for a progress overlay that covers the screen while a job
+   * runs. Not `overlay`, which is a dark scrim meant to dim what is behind it:
+   * this one is the screen's own colour, so the ring looks like it is sitting on
+   * the page rather than on a sheet thrown over it.
+   */
+  canvasVeil: string;
 
   pdf: string;
   word: string;
@@ -44,6 +51,7 @@ export const lightPalette: Palette = {
   inkFaint: '#9C98B0',
   hairline: '#E4E1F0',
   overlay: 'rgba(22,20,42,0.45)',
+  canvasVeil: 'rgba(246,245,251,0.96)',
 
   pdf: '#E5484D',
   word: '#2B6CE5',
@@ -68,6 +76,7 @@ export const darkPalette: Palette = {
   inkFaint: '#726D8C',
   hairline: '#2C2845',
   overlay: 'rgba(5,4,12,0.62)',
+  canvasVeil: 'rgba(18,16,32,0.96)',
 
   // Lifted and softened: the light inks are tuned for white and turn fluorescent
   // on a dark canvas.

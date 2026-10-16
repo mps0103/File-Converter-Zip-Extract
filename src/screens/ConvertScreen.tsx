@@ -290,7 +290,7 @@ const useStyles = makeStyles(palette => StyleSheet.create({
   quotaLine: {...type.caption, color: palette.inkFaint, textAlign: 'center', marginTop: space.md},
   busy: {
     flex: 1,
-    backgroundColor: 'rgba(246,245,251,0.96)',
+    backgroundColor: palette.canvasVeil,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.lg,
