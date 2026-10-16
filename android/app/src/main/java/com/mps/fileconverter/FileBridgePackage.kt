@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class FileBridgePackage : ReactPackage {
     override fun createNativeModules(ctx: ReactApplicationContext): List<NativeModule> =
-        listOf(FileBridgeModule(ctx), ArchiveModule(ctx), BillingModule(ctx))
+        listOf(FileBridgeModule(ctx), ArchiveModule(ctx), BillingModule(ctx), PdfToolsModule(ctx))
 
     override fun createViewManagers(ctx: ReactApplicationContext): List<ViewManager<*, *>> =
         emptyList()

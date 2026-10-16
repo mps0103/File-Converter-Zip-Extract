@@ -17,12 +17,14 @@ import {FileGlyph} from '@/components/FileGlyph';
 import {GradientButton} from '@/components/GradientButton';
 import {toolById} from '@/convert/catalog';
 import {FileBridge} from '@/native/FileBridge';
-import {inkGradient, palette, radius, shadow, space, type} from '@/theme';
+import {makeStyles, radius, shadow, space, type, useTheme} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Result'>;
 
 export const ResultScreen = ({route, navigation}: Props) => {
+  const styles = useStyles();
+  const {inkGradient} = useTheme();
   const {files, warning} = route.params;
   const tool = toolById(route.params.toolId);
   const first = files[0];
@@ -100,7 +102,7 @@ export const ResultScreen = ({route, navigation}: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   hero: {alignItems: 'center', paddingTop: space.xxl, paddingBottom: space.xl},
   check: {
     width: 76,
@@ -133,4 +135,4 @@ const styles = StyleSheet.create({
   share: {...type.caption, color: palette.word},
   cta: {marginTop: space.xl},
   secondary: {marginTop: space.sm},
-});
+}));

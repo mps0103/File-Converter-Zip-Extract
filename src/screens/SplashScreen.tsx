@@ -39,6 +39,8 @@ export const SplashScreen = ({onDone}: {onDone: () => void}) => {
   );
 };
 
+// Not themed: the artwork is a fixed picture with a pale ground, and it is shown
+// before the theme is even read.
 const styles = StyleSheet.create({
   root: {...StyleSheet.absoluteFillObject, backgroundColor: SPLASH_BG},
   art: {width: '100%', height: '100%'},

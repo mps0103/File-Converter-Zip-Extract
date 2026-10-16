@@ -11,6 +11,8 @@ export type ToolId =
   | 'csv-to-excel'
   | 'excel-to-csv'
   | 'word-to-text'
+  | 'image-to-pdf'
+  | 'scan-to-pdf'
   | 'extract-archive'
   | 'make-archive';
 
@@ -22,6 +24,11 @@ export type Tool = {
   ink: InkName;
   accept: string[];
   multi?: boolean;
+  /**
+   * True for a tool whose input is not a file on this phone. The scanner makes its
+   * own pages with the camera, so its screen offers a button instead of a picker.
+   */
+  capture?: boolean;
   /** Shown on the tool screen. Says plainly what survives the conversion. */
   note: string;
   group: 'From PDF' | 'To PDF' | 'Documents & sheets' | 'Archives';
@@ -101,6 +108,28 @@ export const TOOLS: Tool[] = [
     accept: ['text/plain', 'text/html'],
     group: 'To PDF',
     note: 'Clean typeset pages with automatic page breaks.',
+  },
+  {
+    id: 'image-to-pdf',
+    title: 'Images to PDF',
+    from: 'JPG / PNG',
+    to: 'PDF',
+    ink: 'pdf',
+    accept: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/*'],
+    multi: true,
+    group: 'To PDF',
+    note: 'One picture per A4 page, in the order you add them. Pictures are scaled to print size, so a PDF of camera photos stays small enough to email.',
+  },
+  {
+    id: 'scan-to-pdf',
+    title: 'Scan to PDF',
+    from: 'Camera',
+    to: 'PDF',
+    ink: 'pdf',
+    accept: [],
+    capture: true,
+    group: 'To PDF',
+    note: 'Finds the edges of the page, straightens it and cleans it up. Add as many pages as you need, then save them as one PDF. The scanner comes from Google Play services, so the app never needs the camera itself.',
   },
   {
     id: 'csv-to-excel',

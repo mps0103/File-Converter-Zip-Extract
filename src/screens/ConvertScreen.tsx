@@ -15,12 +15,14 @@ import {convert, type ConvertOptions} from '@/convert/engine';
 import {FileBridge, isCancelled, isPasswordError, type PickedFile} from '@/native/FileBridge';
 import {maybeShowInterstitial} from '@/services/ads';
 import {useApp} from '@/hooks/AppState';
-import {inkGradient, palette, radius, shadow, space, type} from '@/theme';
+import {makeStyles, radius, shadow, space, type, useTheme} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Convert'>;
 
 export const ConvertScreen = ({route, navigation}: Props) => {
+  const styles = useStyles();
+  const {palette, inkGradient} = useTheme();
   const tool = toolById(route.params.toolId);
   const {premium, remaining, recordConversion} = useApp();
 
@@ -42,9 +44,12 @@ export const ConvertScreen = ({route, navigation}: Props) => {
   }, [incoming]);
 
   const isArchive = tool.id === 'extract-archive';
+  // The scanner has no file to choose: it makes its pages with the camera, so the
+  // screen offers one button and the usual "choose a file" path is skipped whole.
+  const isCapture = tool.capture === true;
   // Unpacking an archive is not converting it, and a button that says the wrong
   // word makes the user wonder what it is about to do to their file.
-  const verb = isArchive ? 'Extract' : 'Convert';
+  const verb = isArchive ? 'Extract' : isCapture ? 'Open the scanner' : 'Convert';
   // A locked PDF needs the same box a protected ZIP does, or the "password
   // required" message arrives with nowhere to type one.
   const takesPassword = isArchive || tool.id.startsWith('pdf-to-');
@@ -90,6 +95,9 @@ export const ConvertScreen = ({route, navigation}: Props) => {
         setNeedsPassword(true);
         return;
       }
+      // Backing out of the scanner is a decision, not a failure, and telling the
+      // user it went wrong when they chose to stop is its own small insult.
+      if (isCancelled(e)) return;
       setError((e as Error).message || 'That file could not be converted.');
     }
   }, [files, navigation, options, premium, recordConversion, remaining, tool]);
@@ -101,7 +109,17 @@ export const ConvertScreen = ({route, navigation}: Props) => {
         <Text style={styles.note}>{tool.note}</Text>
       </View>
 
-      {files.length === 0 ? (
+      {isCapture ? (
+        <Animated.View entering={FadeInDown.springify().damping(18)}>
+          <View style={styles.dropzone}>
+            <Text style={styles.dropTitle}>Nothing to choose</Text>
+            <Text style={styles.dropHint}>
+              The scanner opens the camera, finds the edges of the page and straightens it. Add as
+              many pages as you like before you save.
+            </Text>
+          </View>
+        </Animated.View>
+      ) : files.length === 0 ? (
         <Animated.View entering={FadeInDown.springify().damping(18)}>
           <Pressable accessibilityRole="button" onPress={pick} style={styles.dropzone}>
             <Text style={styles.dropTitle}>Choose a file</Text>
@@ -160,12 +178,10 @@ export const ConvertScreen = ({route, navigation}: Props) => {
       ) : null}
 
       <GradientButton
-        label={
-          files.length > 1 ? `${verb} ${files.length} files` : verb
-        }
+        label={files.length > 1 ? `${verb} ${files.length} files` : verb}
         colors={inkGradient[tool.ink]}
         onPress={start}
-        disabled={files.length === 0 || busy}
+        disabled={(files.length === 0 && !isCapture) || busy}
         style={styles.cta}
       />
 
@@ -181,7 +197,11 @@ export const ConvertScreen = ({route, navigation}: Props) => {
         <Animated.View entering={FadeIn.duration(180)} style={styles.busy}>
           <ProgressRing percent={percent} ink={tool.ink} />
           <Text style={styles.stage}>{stage}</Text>
-          <Text style={styles.stageHint}>Keep the app open until this finishes.</Text>
+          <Text style={styles.stageHint}>
+            {isCapture
+              ? 'Finish in the scanner and your pages come back here.'
+              : 'Keep the app open until this finishes.'}
+          </Text>
         </Animated.View>
       </Modal>
 
@@ -217,7 +237,7 @@ const formatSize = (bytes: number) => {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   noteCard: {
     flexDirection: 'row',
     gap: space.md,
@@ -277,4 +297,4 @@ const styles = StyleSheet.create({
   },
   stage: {...type.title, color: palette.ink},
   stageHint: {...type.caption, color: palette.inkFaint, marginTop: -space.sm},
-});
+}));

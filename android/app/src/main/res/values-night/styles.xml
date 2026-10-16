@@ -1,0 +1,17 @@
+<resources>
+    <!--
+        Dark-mode bar icons. The parent theme is already DayNight, so this file only
+        has to say the things that differ: light icons on the system bars, which the
+        pale defaults would otherwise leave invisible against a dark canvas.
+
+        The app can also be set to dark while the phone is light, and the other way
+        round. That case is handled in JavaScript, which sets the bar style at
+        runtime from the theme the user actually chose; this is only the first frame.
+    -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/canvas</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:editTextBackground">@android:color/transparent</item>
+    </style>
+</resources>

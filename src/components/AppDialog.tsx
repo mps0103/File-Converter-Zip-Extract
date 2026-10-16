@@ -6,7 +6,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import {motion, palette, radius, shadow, space, type} from '@/theme';
+import {makeStyles, motion, radius, shadow, space, type} from '@/theme';
 import {GradientButton} from './GradientButton';
 
 export type DialogAction = {
@@ -26,6 +26,7 @@ type Props = {
 };
 
 export const AppDialog = ({visible, title, message, icon, actions, onDismiss}: Props) => {
+  const styles = useStyles();
   const enter = useSharedValue(0);
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export const AppDialog = ({visible, title, message, icon, actions, onDismiss}: P
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   scrim: {
     flex: 1,
     backgroundColor: palette.overlay,
@@ -96,4 +97,4 @@ const styles = StyleSheet.create({
   },
   actions: {marginTop: space.xl, gap: space.sm},
   action: {width: '100%'},
-});
+}));

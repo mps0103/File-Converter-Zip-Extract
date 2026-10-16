@@ -55,5 +55,13 @@
 -keep class com.android.billingclient.** { *; }
 -keep class com.android.vending.billing.** { *; }
 
+# The document scanner. Its entry points are static factories, which R8 inlines and
+# then reports the class as removed — fine in principle, except that what they hand
+# back is implemented inside Google Play services and arrives over IPC, where there
+# is nothing for R8 to have reasoned about. The package is small and this is the one
+# feature that cannot be exercised without a camera and a Play-services phone, so it
+# is kept whole rather than found missing by a user.
+-keep class com.google.mlkit.vision.documentscanner.** { *; }
+
 # Google Mobile Ads ships its own consumer rules; a blanket keep only blocked them.
 -dontwarn com.google.android.gms.**

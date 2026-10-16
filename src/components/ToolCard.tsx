@@ -6,13 +6,14 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-import {motion, palette, radius, shadow, space, type} from '@/theme';
+import {makeStyles, motion, radius, shadow, space, type} from '@/theme';
 import type {Tool} from '@/convert/catalog';
 import {FileGlyph} from './FileGlyph';
 
 type Props = {tool: Tool; index: number; onPress: (tool: Tool) => void};
 
 export const ToolCard = ({tool, index, onPress}: Props) => {
+  const styles = useStyles();
   const pressed = useSharedValue(0);
   const animated = useAnimatedStyle(() => ({
     transform: [{scale: withSpring(pressed.value ? 0.96 : 1, motion.press)}],
@@ -48,7 +49,7 @@ export const ToolCard = ({tool, index, onPress}: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   shell: {flex: 1},
   card: {
     flex: 1,
@@ -61,4 +62,4 @@ const styles = StyleSheet.create({
   text: {marginTop: space.md},
   title: {...type.section, fontSize: 16, color: palette.ink},
   meta: {...type.caption, color: palette.inkFaint, marginTop: 2},
-});
+}));

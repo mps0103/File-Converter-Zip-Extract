@@ -22,12 +22,17 @@ class MainActivity : ReactActivity() {
         // here instead gets the same transparent bars on Android 7 through 16, so the
         // app looks the same everywhere rather than only on the newest phones.
         //
-        // light() means a light bar with dark icons, which is what this app's pale
-        // canvas needs. The bars are transparent; the screen paints its own colour
+        // auto() picks the icon colour from the phone's own dark mode setting. It
+        // is only ever right for the first frame: the app has its own light/dark
+        // choice, which may disagree with the phone's, so JavaScript sets the bar
+        // style again from the chosen theme as soon as a screen is drawn. This is
+        // what stops the gap between the two being a frame of invisible icons.
+        //
+        // The bars are transparent either way; the screen paints its own colour
         // behind them and pads its content by the insets.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         super.onCreate(null)
     }

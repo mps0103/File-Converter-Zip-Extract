@@ -11,7 +11,7 @@ import {toolById} from '@/convert/catalog';
 import {previewKindFor} from '@/convert/preview';
 import {FileBridge} from '@/native/FileBridge';
 import {useApp} from '@/hooks/AppState';
-import {palette, radius, shadow, space, type, type InkName} from '@/theme';
+import {makeStyles, radius, shadow, space, type, type InkName} from '@/theme';
 import type {HistoryItem} from '@/services/history';
 import type {RootStackParamList} from '@/navigation/types';
 
@@ -47,6 +47,7 @@ const inkForExtension = (ext: string): InkName => {
 };
 
 export const HistoryScreen = ({navigation}: Props) => {
+  const styles = useStyles();
   const {history, wipeHistory, forgetHistoryItem} = useApp();
   const [confirm, setConfirm] = useState(false);
   // The row a long press picked out, held until the sheet is answered.
@@ -170,7 +171,7 @@ export const HistoryScreen = ({navigation}: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   empty: {alignItems: 'center', paddingTop: space.xxl * 2, gap: space.md},
   emptyTitle: {...type.title, color: palette.ink},
   emptyHint: {...type.caption, color: palette.inkFaint, textAlign: 'center'},
@@ -192,4 +193,4 @@ const styles = StyleSheet.create({
   open: {...type.caption, color: palette.word},
   clear: {paddingVertical: space.xl, alignItems: 'center'},
   clearText: {...type.caption, color: palette.danger},
-});
+}));

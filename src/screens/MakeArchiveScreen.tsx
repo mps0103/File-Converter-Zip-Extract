@@ -20,7 +20,7 @@ import {
 } from '@/native/FileBridge';
 import {maybeShowInterstitial} from '@/services/ads';
 import {useApp} from '@/hooks/AppState';
-import {inkGradient, palette, radius, shadow, space, type} from '@/theme';
+import {makeStyles, radius, shadow, space, type, useTheme} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MakeArchive'>;
@@ -43,6 +43,8 @@ const FORMATS: Array<{id: ArchiveFormat; label: string; hint: string; locks: boo
 ];
 
 export const MakeArchiveScreen = ({navigation}: Props) => {
+  const styles = useStyles();
+  const {palette, inkGradient} = useTheme();
   const {premium, remaining, recordConversion} = useApp();
 
   const [files, setFiles] = useState<PickedFile[]>([]);
@@ -271,7 +273,7 @@ const formatSize = (bytes: number) => {
   return `${value < 10 && unit > 0 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   dropzone: {
     borderWidth: 2,
     borderStyle: 'dashed',
@@ -340,4 +342,4 @@ const styles = StyleSheet.create({
   },
   stage: {...type.title, color: palette.ink},
   stageHint: {...type.caption, color: palette.inkFaint, marginTop: -space.sm},
-});
+}));

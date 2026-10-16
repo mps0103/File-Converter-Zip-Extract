@@ -1,5 +1,5 @@
-import React, {useState} from 'react';
-import {NavigationContainer, DefaultTheme} from '@react-navigation/native';
+import React, {useMemo, useState} from 'react';
+import {NavigationContainer, DarkTheme, DefaultTheme} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
 import {HomeScreen} from '@/screens/HomeScreen';
@@ -10,23 +10,32 @@ import {PremiumScreen} from '@/screens/PremiumScreen';
 import {SettingsScreen} from '@/screens/SettingsScreen';
 import {HistoryScreen} from '@/screens/HistoryScreen';
 import {ViewerScreen} from '@/screens/ViewerScreen';
-import {palette} from '@/theme';
+import {useTheme} from '@/theme';
 import {useIncomingFile} from '@/hooks/useIncomingFile';
 import {navigationRef} from './navigationRef';
 import type {RootStackParamList} from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const navTheme = {
-  ...DefaultTheme,
-  colors: {...DefaultTheme.colors, background: palette.canvas, card: palette.canvas, text: palette.ink},
-};
-
 export const RootNavigator = () => {
   // The container has to be ready before anything can be pushed onto the stack,
   // so an archive opened from another app waits for it rather than being dropped.
   const [ready, setReady] = useState(false);
   useIncomingFile(ready);
+  const {palette, dark} = useTheme();
+
+  // React Navigation paints the gap between screens during a push, so its theme
+  // has to agree with the app's or a dark app flashes white on every transition.
+  const navTheme = useMemo(
+    () => {
+      const base = dark ? DarkTheme : DefaultTheme;
+      return {
+        ...base,
+        colors: {...base.colors, background: palette.canvas, card: palette.canvas, text: palette.ink},
+      };
+    },
+    [dark, palette],
+  );
 
   return (
     <NavigationContainer theme={navTheme} ref={navigationRef} onReady={() => setReady(true)}>

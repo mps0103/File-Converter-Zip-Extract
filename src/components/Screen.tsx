@@ -9,7 +9,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
-import {palette, space, type} from '@/theme';
+import {makeStyles, space, type, useTheme} from '@/theme';
 
 /**
  * The widest the content is ever laid out, whatever the screen.
@@ -48,6 +48,8 @@ export const Screen = ({
   onScroll,
   children,
 }: Props) => {
+  const styles = useStyles();
+  const {dark} = useTheme();
   const Body: any = scroll ? ScrollView : View;
   const insets = useSafeAreaInsets();
   // The bottom edge is left off SafeAreaView so a footer can paint its own background
@@ -56,7 +58,12 @@ export const Screen = ({
   const bodyInset = footer ? 0 : insets.bottom;
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" />
+      {/*
+        The bars are transparent, set natively, so only the icons are decided here —
+        and they have to be the opposite of whatever the screen is painting behind
+        them or they vanish into it.
+      */}
+      <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} />
       {title ? (
         <View style={styles.header}>
           <View style={styles.headerText}>
@@ -87,7 +94,7 @@ export const Screen = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   safe: {flex: 1, backgroundColor: palette.canvas},
   // Applied to the header and to the body, so the title stays above the content it
   // belongs to rather than drifting off to the left edge of a wide screen.
@@ -109,4 +116,4 @@ const styles = StyleSheet.create({
   subtitle: {...type.body, color: palette.inkSoft, marginTop: 2},
   body: {flex: 1},
   content: {paddingHorizontal: space.xl, paddingBottom: space.xxl},
-});
+}));

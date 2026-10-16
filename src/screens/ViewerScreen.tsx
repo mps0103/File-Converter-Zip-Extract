@@ -31,7 +31,7 @@ import {ProgressRing, RING_SETTLE_MS} from '@/components/ProgressRing';
 import {AppDialog} from '@/components/AppDialog';
 import {QuotaGate} from '@/components/QuotaGate';
 import {FileBridge, isCancelled, isPasswordError, type PickedFile} from '@/native/FileBridge';
-import {palette, radius, shadow, space, type} from '@/theme';
+import {makeStyles, radius, shadow, space, type, useTheme} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Viewer'>;
@@ -91,6 +91,8 @@ const PdfPage = ({
   password: string;
   active: boolean;
 }) => {
+  const styles = useStyles();
+  const {palette} = useTheme();
   const [src, setSrc] = useState<string | null>(null);
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
   const [failed, setFailed] = useState(false);
@@ -164,6 +166,7 @@ const PageZoom = ({
   password: string;
   onClose: () => void;
 }) => {
+  const styles = useStyles();
   const {width, height} = useWindowDimensions();
   const [src, setSrc] = useState<string | null>(null);
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
@@ -285,6 +288,8 @@ const PageZoom = ({
 };
 
 export const ViewerScreen = ({route, navigation}: Props) => {
+  const styles = useStyles();
+  const {palette} = useTheme();
   const {width} = useWindowDimensions();
   const [file, setFile] = useState<PickedFile | null>(route.params?.file ?? null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -707,7 +712,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   centre: {alignItems: 'center', gap: space.md, paddingVertical: space.xxl},
   muted: {...type.caption, color: palette.inkFaint},
   note: {...type.caption, color: palette.inkSoft, marginBottom: space.md},
@@ -819,4 +824,4 @@ const styles = StyleSheet.create({
   tabOn: {backgroundColor: '#FFFFFF', borderTopColor: '#107C41'},
   tabText: {fontSize: 15, color: '#444444', maxWidth: 200},
   tabTextOn: {color: '#107C41', fontWeight: '700'},
-});
+}));

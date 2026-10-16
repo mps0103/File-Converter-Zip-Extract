@@ -3,10 +3,11 @@ import {StyleSheet, View} from 'react-native';
 import {BannerAd, BannerAdSize} from 'react-native-google-mobile-ads';
 import {AD_UNITS} from '@/services/ads';
 import {useApp} from '@/hooks/AppState';
-import {palette} from '@/theme';
+import {makeStyles} from '@/theme';
 
 /** Anchored to the bottom of a screen, never over content the user is reading. */
 export const AdBanner = () => {
+  const styles = useStyles();
   const {premium} = useApp();
   if (premium) return null;
 
@@ -21,7 +22,7 @@ export const AdBanner = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   wrap: {
     alignItems: 'center',
     backgroundColor: palette.canvas,
@@ -29,4 +30,4 @@ const styles = StyleSheet.create({
     borderTopColor: palette.hairline,
     paddingVertical: 2,
   },
-});
+}));

@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, {Circle, Defs, LinearGradient, Stop} from 'react-native-svg';
-import {inkGradient, palette, type, type InkName} from '@/theme';
+import {makeStyles, type, type InkName, useTheme} from '@/theme';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -27,6 +27,8 @@ type Props = {
 export const RING_SETTLE_MS = 420;
 
 export const ProgressRing = ({percent, ink, size = 168}: Props) => {
+  const styles = useStyles();
+  const {palette, inkGradient} = useTheme();
   const [from, to] = inkGradient[ink];
   const stroke = 12;
   const r = (size - stroke) / 2;
@@ -109,8 +111,8 @@ export const ProgressRing = ({percent, ink, size = 168}: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   center: {...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center'},
   percent: {...type.display, fontSize: 44, lineHeight: 48, color: palette.ink},
   unit: {...type.caption, color: palette.inkFaint},
-});
+}));

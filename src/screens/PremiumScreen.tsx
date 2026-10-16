@@ -9,7 +9,7 @@ import {AppDialog} from '@/components/AppDialog';
 import {GradientButton} from '@/components/GradientButton';
 import {buy, loadPlans, manageSubscriptionUrl, type Plan} from '@/services/billing';
 import {useApp} from '@/hooks/AppState';
-import {palette, premiumGradient, radius, shadow, space, type} from '@/theme';
+import {makeStyles, premiumGradient, radius, shadow, space, type, useTheme} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Premium'>;
@@ -22,6 +22,8 @@ const BENEFITS = [
 ];
 
 export const PremiumScreen = ({navigation}: Props) => {
+  const styles = useStyles();
+  const {palette} = useTheme();
   const {premium, refreshEntitlement} = useApp();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,7 +152,7 @@ export const PremiumScreen = ({navigation}: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   card: {backgroundColor: palette.surface, borderRadius: radius.card, padding: space.lg, gap: space.sm},
   benefit: {...type.body, color: palette.ink},
   loader: {marginTop: space.xl},
@@ -176,4 +178,4 @@ const styles = StyleSheet.create({
   restore: {paddingVertical: space.lg, alignItems: 'center'},
   restoreText: {...type.caption, color: palette.inkSoft},
   legal: {...type.caption, color: palette.inkFaint, textAlign: 'center', lineHeight: 17},
-});
+}));

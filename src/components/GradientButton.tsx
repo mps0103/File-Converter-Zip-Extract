@@ -2,7 +2,7 @@ import React from 'react';
 import {Pressable, StyleSheet, Text, View, type ViewStyle} from 'react-native';
 import Animated, {useAnimatedStyle, useSharedValue, withSpring} from 'react-native-reanimated';
 import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
-import {motion, palette, radius, type} from '@/theme';
+import {makeStyles, motion, radius, type, useTheme} from '@/theme';
 
 type Props = {
   label: string;
@@ -23,6 +23,8 @@ export const GradientButton = ({
   style,
   height = 54,
 }: Props) => {
+  const styles = useStyles();
+  const {palette} = useTheme();
   const pressed = useSharedValue(0);
   const animated = useAnimatedStyle(() => ({
     transform: [{scale: withSpring(pressed.value ? 0.965 : 1, motion.press)}],
@@ -86,7 +88,7 @@ export const GradientButton = ({
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   wrap: {
     borderRadius: radius.pill,
     overflow: 'hidden',
@@ -100,4 +102,4 @@ const styles = StyleSheet.create({
     backgroundColor: palette.surfaceSunk,
   },
   label: {...type.section, fontSize: 16, color: '#FFFFFF'},
-});
+}));

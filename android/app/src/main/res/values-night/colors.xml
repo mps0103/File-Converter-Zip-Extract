@@ -1,0 +1,12 @@
+<resources>
+    <!--
+        The window behind the app, on a phone in dark mode. It matches the dark
+        canvas in src/theme/colors.ts: the window is what the user sees during the
+        moment between the process starting and React Native drawing anything, and
+        a light window there is a white flash on a dark phone.
+
+        The splash keeps its own pale ground in both themes, because the artwork it
+        shows is a light picture and a dark surround would frame it in black.
+    -->
+    <color name="canvas">#121020</color>
+</resources>

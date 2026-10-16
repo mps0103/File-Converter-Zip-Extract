@@ -8,12 +8,13 @@ import {ToolCard} from '@/components/ToolCard';
 import {QuotaPill} from '@/components/QuotaPill';
 import {AdBanner} from '@/components/AdBanner';
 import {GROUPS, TOOLS, type Tool} from '@/convert/catalog';
-import {palette, radius, space, type} from '@/theme';
+import {makeStyles, radius, space, type} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export const HomeScreen = ({navigation}: Props) => {
+  const styles = useStyles();
   const [group, setGroup] = useState<Tool['group'] | 'All'>('All');
 
   // Two cards side by side on a phone, more when there is room — a rotated phone,
@@ -87,7 +88,7 @@ export const HomeScreen = ({navigation}: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   viewer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -125,4 +126,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {...type.section, color: palette.ink},
-});
+}));

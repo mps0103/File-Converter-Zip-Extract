@@ -1,10 +1,11 @@
 import React from 'react';
 import {Pressable, StyleSheet, Text} from 'react-native';
 import Animated, {FadeIn} from 'react-native-reanimated';
-import {palette, radius, space, type} from '@/theme';
+import {makeStyles, radius, space, type} from '@/theme';
 import {useApp} from '@/hooks/AppState';
 
 export const QuotaPill = ({onPress}: {onPress: () => void}) => {
+  const styles = useStyles();
   const {premium, remaining} = useApp();
   const label = premium ? 'Premium' : `${remaining} free left`;
   const low = !premium && remaining <= 1;
@@ -28,7 +29,7 @@ export const QuotaPill = ({onPress}: {onPress: () => void}) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
   pill: {
     paddingHorizontal: space.md,
     paddingVertical: 7,
@@ -42,4 +43,4 @@ const styles = StyleSheet.create({
   text: {...type.caption, color: palette.inkSoft},
   premiumText: {color: '#B46A00'},
   lowText: {color: palette.danger},
-});
+}));

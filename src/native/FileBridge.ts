@@ -40,6 +40,21 @@ export type RenderedPage = {uri: string; width: number; height: number};
 
 export type ArchiveEntryInfo = {name: string; size: number};
 
+type PdfToolsBridgeType = {
+  /**
+   * Lays each picture onto its own A4 page, in the order given, and saves the PDF
+   * into Downloads. Pictures are sampled down on the native side: a page can only
+   * show so much, and a batch of camera photos at full size is hundreds of
+   * megabytes of bitmap.
+   */
+  imagesToPdf(uris: string[], baseName: string): Promise<SavedFile>;
+  /**
+   * Opens Google Play services' document scanner and saves what comes back.
+   * Rejects with code 'cancelled' if the user backs out, which is not an error.
+   */
+  scanToPdf(baseName: string): Promise<SavedFile>;
+};
+
 /** What the app can write. RAR is deliberately absent — the format is proprietary
  *  and the bundled decoder only reads. */
 export type ArchiveFormat = 'zip' | '7z' | 'tar' | 'tar.gz' | 'tar.bz2' | 'tar.xz';
@@ -131,6 +146,10 @@ export const IS_DEBUG_BUILD: boolean =
 export const FileBridge: Bridge =
   (NativeModules.FileBridge as Bridge) ?? new Proxy({} as Bridge, {get: () => missing});
 
+export const PdfToolsBridge: PdfToolsBridgeType =
+  (NativeModules.PdfTools as PdfToolsBridgeType) ??
+  new Proxy({} as PdfToolsBridgeType, {get: () => missing});
+
 export const ArchiveBridge: ArchiveBridgeType =
   (NativeModules.ArchiveBridge as ArchiveBridgeType) ??
   new Proxy({} as ArchiveBridgeType, {get: () => missing});
@@ -139,6 +158,13 @@ export const ArchiveBridge: ArchiveBridgeType =
 export const onArchiveProgress = (fn: (p: ArchiveProgress) => void) => {
   const emitter = new NativeEventEmitter(NativeModules.ArchiveBridge);
   const sub = emitter.addListener('archiveProgress', fn);
+  return () => sub.remove();
+};
+
+/** Fires as each picture is added to a PDF, so the ring keeps moving. */
+export const onPdfToolsProgress = (fn: (p: ArchiveProgress) => void) => {
+  const emitter = new NativeEventEmitter(NativeModules.PdfTools);
+  const sub = emitter.addListener('pdfToolsProgress', fn);
   return () => sub.remove();
 };
 

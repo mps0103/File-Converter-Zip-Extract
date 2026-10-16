@@ -6,7 +6,9 @@ import {Document, HeadingLevel, Packer, Paragraph, TextRun} from 'docx';
 import {
   ArchiveBridge,
   FileBridge,
+  PdfToolsBridge,
   onArchiveProgress,
+  onPdfToolsProgress,
   type PickedFile,
   type SavedFile,
 } from '@/native/FileBridge';
@@ -282,6 +284,53 @@ const extractArchive = async (
   }
 };
 
+// ------------------------------------------------------------ pictures to PDF
+
+/**
+ * Pictures onto pages, laid out natively.
+ *
+ * None of this passes through JavaScript. A PDF of ten camera photos built the way
+ * the other converters work — read each file as base64, hand it to a library, let
+ * it draw — would be hundreds of megabytes of strings and bitmaps for a job the
+ * native side can stream one picture at a time.
+ */
+const imagesToPdf = async (files: PickedFile[], p: Progress): Promise<ConvertResult> => {
+  p(12, 'Reading the pictures');
+  const off = onPdfToolsProgress(({done, total, stage}) => {
+    p(12 + Math.round((done / Math.max(total, 1)) * 76), stage);
+  });
+  try {
+    const saved = await PdfToolsBridge.imagesToPdf(
+      files.map(f => f.uri),
+      stripExtension(files[0].name) || 'Pictures',
+    );
+    p(94, 'Saving to Downloads');
+    return {
+      files: [saved],
+      warning:
+        files.length > 20
+          ? `${files.length} pictures were put into one PDF, which may take a moment to open.`
+          : undefined,
+    };
+  } finally {
+    off();
+  }
+};
+
+/**
+ * The scanner, which is a screen of its own belonging to Google Play services.
+ *
+ * The progress ring is told to wait rather than to move: everything between here
+ * and the result happens in another app, and this app has no idea how long the
+ * user will spend lining up a page.
+ */
+const scanToPdf = async (p: Progress): Promise<ConvertResult> => {
+  p(10, 'Opening the scanner');
+  const saved = await PdfToolsBridge.scanToPdf(`Scan ${new Date().toISOString().slice(0, 10)}`);
+  p(94, 'Saving to Downloads');
+  return {files: [saved]};
+};
+
 // ------------------------------------------------------------------ dispatch
 
 export async function convert(
@@ -290,7 +339,9 @@ export async function convert(
   options: ConvertOptions,
   onProgress: Progress,
 ): Promise<ConvertResult> {
-  if (!files.length) {
+  // The scanner makes its own pages, so it is the one tool that starts with
+  // nothing to point at.
+  if (!files.length && !tool.capture) {
     throw new Error('Choose a file first.');
   }
   const one = files[0];
@@ -310,6 +361,8 @@ export async function convert(
     'csv-to-excel': () => csvToExcel(one, onProgress),
     'excel-to-csv': () => excelToCsv(one, onProgress),
     'word-to-text': () => wordToText(one, onProgress),
+    'image-to-pdf': () => imagesToPdf(files, onProgress),
+    'scan-to-pdf': () => scanToPdf(onProgress),
     'extract-archive': () => extractArchive(one, onProgress, options),
   };
 

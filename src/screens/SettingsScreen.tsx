@@ -8,7 +8,7 @@ import {privacyOptionsRequired, showPrivacyOptions} from '@/services/ads';
 import {UNLOCK_TAPS, isDeveloper, lockDeveloper, unlockDeveloper} from '@/services/devMode';
 import {useApp} from '@/hooks/AppState';
 import {FREE_CONVERSIONS} from '@/services/quota';
-import {palette, radius, shadow, space, type} from '@/theme';
+import {makeStyles, radius, shadow, space, type, useTheme, type ThemeChoice} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
@@ -22,7 +22,15 @@ export const TERMS_URL =
   'https://mps0103.github.io/File-Converter-Zip-Extract/terms-of-use.html';
 export const SUPPORT_EMAIL = 'info@dealtrix.com';
 
+const THEME_CHOICES: Array<{id: ThemeChoice; label: string}> = [
+  {id: 'system', label: 'System'},
+  {id: 'light', label: 'Light'},
+  {id: 'dark', label: 'Dark'},
+];
+
 export const SettingsScreen = ({navigation}: Props) => {
+  const styles = useStyles();
+  const {palette, choice, setChoice} = useTheme();
   const {premium, used, refreshEntitlement, testEntitlement, setTestPremium, resetFreeQuota} =
     useApp();
 
@@ -108,6 +116,28 @@ export const SettingsScreen = ({navigation}: Props) => {
           your purchase with Google Play.
         </Text>
       </Pressable>
+
+      <Text style={styles.sectionLabel}>Appearance</Text>
+      <View style={[styles.themeRow, shadow(1)]}>
+        {THEME_CHOICES.map(option => {
+          const on = choice === option.id;
+          return (
+            <Pressable
+              key={option.id}
+              onPress={() => setChoice(option.id)}
+              style={[styles.themeChip, on && styles.themeChipOn]}>
+              <Text style={[styles.themeChipText, on && styles.themeChipTextOn]}>{option.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.themeHint}>
+        {choice === 'system'
+          ? 'Follows your phone, including its light and dark schedule.'
+          : choice === 'dark'
+            ? 'Always dark, whatever your phone is set to.'
+            : 'Always light, whatever your phone is set to.'}
+      </Text>
 
       <View style={styles.list}>
         {rows.map(row => (
@@ -219,7 +249,16 @@ export const SettingsScreen = ({navigation}: Props) => {
   );
 };
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(palette => StyleSheet.create({
+  sectionLabel: {...type.caption, color: palette.inkFaint, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: space.sm},
+  // One track holding three chips, so the choice reads as one control rather than
+  // three buttons that happen to sit together.
+  themeRow: {flexDirection: 'row', backgroundColor: palette.surface, borderRadius: radius.card, padding: space.xs, gap: space.xs},
+  themeChip: {flex: 1, paddingVertical: space.md, borderRadius: radius.chip, alignItems: 'center'},
+  themeChipOn: {backgroundColor: palette.surfaceSunk},
+  themeChipText: {...type.section, color: palette.inkSoft},
+  themeChipTextOn: {color: palette.ink},
+  themeHint: {...type.caption, color: palette.inkFaint, marginTop: space.sm, marginBottom: space.xl},
   code: {
     borderWidth: 1,
     borderColor: palette.hairline,
@@ -266,4 +305,4 @@ const styles = StyleSheet.create({
   debugTitle: {...type.section, color: '#8A5A00'},
   debugText: {...type.caption, color: '#8A5A00', lineHeight: 18, marginBottom: space.xs},
   debugRow: {backgroundColor: palette.surface},
-});
+}));

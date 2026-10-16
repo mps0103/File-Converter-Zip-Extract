@@ -32,4 +32,6 @@ export const KEYS = {
   testEntitlement: 'debug.testEntitlement',
   /** Set once the developer unlock has been entered on this device. */
   developer: 'debug.developer',
+  /** Light, dark, or follow the phone. */
+  theme: 'ui.theme',
 } as const;

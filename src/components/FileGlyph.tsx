@@ -1,6 +1,6 @@
 import React from 'react';
 import Svg, {Defs, LinearGradient, Path, Rect, Stop, Text as SvgText} from 'react-native-svg';
-import {inkGradient, type InkName} from '@/theme';
+import {type InkName, useTheme} from '@/theme';
 
 type Props = {
   ink: InkName;
@@ -13,6 +13,7 @@ type Props = {
  * Drawn rather than imported so every format shares one silhouette and only the ink changes.
  */
 export const FileGlyph = ({ink, label, size = 44}: Props) => {
+  const {inkGradient} = useTheme();
   const [from, to] = inkGradient[ink];
   const id = `g-${ink}`;
   const w = size;
