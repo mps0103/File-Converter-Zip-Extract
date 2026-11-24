@@ -9,7 +9,47 @@ import {getCredits, spendCredit} from './credits';
  */
 export const FREE_CONVERSIONS = 10;
 
-export const getUsed = () => store.read<number>(KEYS.used, 0);
+/**
+ * The free-allowance epoch. Everyone whose stored epoch is lower than this gets a
+ * fresh allowance, once.
+ *
+ * 2 is the 2.0.0 release: every user, including one who spent their whole allowance
+ * on 1.x, starts 2.0.0 with all FREE_CONVERSIONS again. A fresh install is also
+ * epoch 2 with nothing used.
+ *
+ * BUMP THIS ONLY WHEN YOU DELIBERATELY WANT TO HAND EVERYONE A NEW ALLOWANCE. An
+ * ordinary release leaves it alone, so updating the app never resets anybody's count.
+ * Only the free "used" tally is reset: earned rewarded-ad credits, premium
+ * entitlement and history are not touched.
+ */
+export const QUOTA_EPOCH = 2;
+
+let epochChecked: Promise<void> | null = null;
+
+/**
+ * Runs once per app launch, before the first read of the count, and changes anything
+ * only when the stored epoch is behind QUOTA_EPOCH — so once per user per epoch, never
+ * on every launch. The count is cleared before the epoch is written: if the app dies
+ * between the two, the next launch repeats a reset that was already due, which costs
+ * nothing, where the other order could lose the reset for good.
+ */
+const ensureEpoch = (): Promise<void> => {
+  if (!epochChecked) {
+    epochChecked = (async () => {
+      const stored = await store.read<number>(KEYS.quotaEpoch, 0);
+      if (stored < QUOTA_EPOCH) {
+        await store.write(KEYS.used, 0);
+        await store.write(KEYS.quotaEpoch, QUOTA_EPOCH);
+      }
+    })();
+  }
+  return epochChecked;
+};
+
+export const getUsed = async () => {
+  await ensureEpoch();
+  return store.read<number>(KEYS.used, 0);
+};
 
 export const getRemaining = async (isPremium: boolean) => {
   if (isPremium) return Infinity;
@@ -19,7 +59,10 @@ export const getRemaining = async (isPremium: boolean) => {
 export const canConvert = async (isPremium: boolean) => (await getRemaining(isPremium)) > 0;
 
 /** Debug-build testing aid: puts the free tally back to zero. */
-export const resetQuota = () => store.write(KEYS.used, 0);
+export const resetQuota = async () => {
+  await ensureEpoch();
+  await store.write(KEYS.used, 0);
+};
 
 /** Only called after a file has actually been written. A failed run costs nothing. */
 export const countConversion = async (isPremium: boolean) => {

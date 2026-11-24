@@ -21,6 +21,8 @@ export const store = {read, write, remove: (k: string) => AsyncStorage.removeIte
 
 export const KEYS = {
   used: 'quota.used',
+  /** Which free-allowance epoch the stored `used` count belongs to. See quota.ts. */
+  quotaEpoch: 'quota.epoch',
   entitlement: 'billing.entitlement',
   history: 'history.items',
   seenIntro: 'intro.seen',

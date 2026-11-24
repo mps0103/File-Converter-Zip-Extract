@@ -6,7 +6,7 @@ import {Screen} from '@/components/Screen';
 import {FolderCard} from '@/components/FolderCard';
 import {QuotaPill} from '@/components/QuotaPill';
 import {BottomTabs} from '@/components/BottomTabs';
-import {FOLDERS, toolsInFolder} from '@/convert/catalog';
+import {FOLDERS} from '@/convert/catalog';
 import {makeStyles, radius, space, type} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
@@ -47,7 +47,6 @@ export const HomeScreen = ({navigation}: Props) => {
           <View key={folder.id} style={[styles.cell, {width: `${100 / columns}%`}]}>
             <FolderCard
               folder={folder}
-              count={toolsInFolder(folder).length}
               index={i}
               onPress={f => navigation.navigate('Folder', {folderId: f.id})}
             />

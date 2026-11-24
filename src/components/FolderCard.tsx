@@ -10,7 +10,7 @@ import {makeStyles, motion, radius, shadow, space, type} from '@/theme';
 import type {Folder} from '@/convert/catalog';
 import {FolderIcon} from './FolderIcon';
 
-type Props = {folder: Folder; count: number; index: number; onPress: (folder: Folder) => void};
+type Props = {folder: Folder; index: number; onPress: (folder: Folder) => void};
 
 /**
  * A folder on the home screen. It is a ToolCard in everything but its contents — the
@@ -18,7 +18,7 @@ type Props = {folder: Folder; count: number; index: number; onPress: (folder: Fo
  * Its picture is a drawn icon of what is inside rather than the paper-sheet glyph
  * the tools use, so a folder is not mistaken for a file.
  */
-export const FolderCard = ({folder, count, index, onPress}: Props) => {
+export const FolderCard = ({folder, index, onPress}: Props) => {
   const styles = useStyles();
   const pressed = useSharedValue(0);
   const animated = useAnimatedStyle(() => ({
@@ -31,14 +31,13 @@ export const FolderCard = ({folder, count, index, onPress}: Props) => {
       <Animated.View style={[styles.shell, animated]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${folder.title}, ${count} tools. ${folder.blurb}.`}
+          accessibilityLabel={`${folder.title}. ${folder.blurb}.`}
           onPressIn={() => (pressed.value = 1)}
           onPressOut={() => (pressed.value = 0)}
           onPress={() => onPress(folder)}
           style={[styles.card, shadow(1)]}>
           <View style={styles.top}>
             <FolderIcon folderId={folder.id} ink={folder.ink} size={52} />
-            <Text style={styles.count}>{count}</Text>
           </View>
           <View style={styles.text}>
             <Text style={styles.title} numberOfLines={2}>
@@ -64,8 +63,7 @@ const useStyles = makeStyles(palette => StyleSheet.create({
     padding: space.lg,
     justifyContent: 'space-between',
   },
-  top: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start'},
-  count: {...type.title, color: palette.inkFaint},
+  top: {flexDirection: 'row', alignItems: 'flex-start'},
   text: {marginTop: space.md},
   title: {...type.section, fontSize: 16, color: palette.ink},
   meta: {...type.caption, color: palette.inkFaint, marginTop: 2},
