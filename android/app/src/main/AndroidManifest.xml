@@ -22,6 +22,13 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
     <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" tools:node="remove" />
 
+    <!--
+        The main screen is locked to portrait, and Android reads that as "this app needs a
+        portrait screen", which Play then uses to hide the app from devices without one.
+        The lock is a layout choice, not a hardware need, so the requirement is lifted.
+    -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+
     <!-- Lets the "Open file" button find a viewer without asking for package visibility. -->
     <queries>
         <intent>
