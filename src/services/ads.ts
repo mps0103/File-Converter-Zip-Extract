@@ -34,25 +34,8 @@ export const AD_UNITS = {
 const EVERY_N_CONVERSIONS = 3;
 const MIN_GAP_MS = 120_000;
 
-// ======================================================================================
-// TEST DEVICES — CHECK THIS BEFORE EVERY RELEASE.
-//
-// A phone listed here is served Google's test ads, whatever ad unit the app asks for,
-// so tapping and loading ads on it cannot count as invalid traffic against the real
-// units. The ID is the one the ad SDK prints in logcat as
-//   Use RequestConfiguration.Builder().setTestDeviceIds(Arrays.asList("<id>"))
-//
-// This list is EMPTY for release, so every phone is served the real ad units. To develop
-// against test ads on a phone, add its ID here (the I2220 / vivo test phone used during
-// 2.0.0 development was 5469F6837C3348333BC75DE4D5E05C8B) and take it out again before
-// building a release.
-//
-// An ID left in a release build only affects that one phone, but it is development
-// scaffolding, so it is kept easy to find on purpose. The same ID should also
-// be registered in the AdMob console (Settings > Test devices), which covers every app
-// under the publisher account.
-// ======================================================================================
-const TEST_DEVICE_IDS: string[] = [];
+// Test devices are registered in the AdMob console (Settings > Test devices), by
+// advertising ID, not in this app, so no device ID is kept in the code.
 
 let interstitial: InterstitialAd | null = null;
 let loaded = false;
@@ -77,7 +60,6 @@ export const initAds = async () => {
       maxAdContentRating: MaxAdContentRating.G,
       tagForChildDirectedTreatment: false,
       tagForUnderAgeOfConsent: false,
-      testDeviceIdentifiers: TEST_DEVICE_IDS,
     });
     await mobileAds().initialize();
     preloadInterstitial();
