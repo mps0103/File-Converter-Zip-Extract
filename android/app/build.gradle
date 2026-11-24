@@ -27,13 +27,18 @@ android {
     namespace "com.mps.fileconverter"
 
     defaultConfig {
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
         applicationId "com.mps.fileconverter"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
 
         // Bump both together at the end of a batch of changes, before every Play upload.
-        versionCode 8
-        versionName "1.0.7"
+        versionCode 9
+        versionName "2.0.0"
 
         multiDexEnabled true
         resourceConfigurations += ["en"]
@@ -70,7 +75,24 @@ android {
         }
     }
 
+    // libmp3lame.so: the LAME MP3 encoder, built from source with the NDK. NDK r27
+    // links with 4 KB pages unless asked, and Play requires 16 KB, so the flexible
+    // page size switch is on for the toolchain as well as the link flag in the
+    // CMakeLists itself.
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
     packagingOptions {
+        // Native libraries are stored uncompressed and page-aligned inside the APK and
+        // mapped straight from it. This is the default at minSdk 23 and up; it is set
+        // out here because 16 KB page alignment depends on it and Play checks for it.
+        jniLibs {
+            useLegacyPackaging = false
+        }
         resources {
             excludes += [
                     'META-INF/DEPENDENCIES',
@@ -148,6 +170,19 @@ dependencies {
 
     // Offline PDF text extraction. Nothing here touches the network.
     implementation "com.tom-roush:pdfbox-android:2.0.27.0"
+
+    // On-device text recognition for "Make searchable". This is the BUNDLED model
+    // (com.google.mlkit:text-recognition), not the Play services variant: the model
+    // ships inside the APK, so no model is ever downloaded and no page leaves the
+    // phone. Do not swap it for play-services-mlkit-text-recognition.
+    implementation "com.google.mlkit:text-recognition:16.0.1"
+
+    // Video, through the phone's own hardware codecs. Transformer does the work; the
+    // others are what its API is written against. Everything runs on the device.
+    implementation "androidx.media3:media3-transformer:1.5.1"
+    implementation "androidx.media3:media3-effect:1.5.1"
+    implementation "androidx.media3:media3-common:1.5.1"
+    implementation "androidx.annotation:annotation-experimental:1.4.1"
 
     // Archive decoders, all pure JVM so extraction works with no connection.
     implementation "net.lingala.zip4j:zip4j:2.11.5"              // ZIP, incl. ZipCrypto and AES

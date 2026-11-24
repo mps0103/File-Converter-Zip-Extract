@@ -1,47 +1,36 @@
-import React, {useMemo, useState} from 'react';
+import React from 'react';
 import {Pressable, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
-import Animated, {FadeIn} from 'react-native-reanimated';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {Screen} from '@/components/Screen';
-import {ToolCard} from '@/components/ToolCard';
+import {FolderCard} from '@/components/FolderCard';
 import {QuotaPill} from '@/components/QuotaPill';
-import {AdBanner} from '@/components/AdBanner';
-import {GROUPS, TOOLS, type Tool} from '@/convert/catalog';
+import {BottomTabs} from '@/components/BottomTabs';
+import {FOLDERS, toolsInFolder} from '@/convert/catalog';
 import {makeStyles, radius, space, type} from '@/theme';
 import type {RootStackParamList} from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
+/**
+ * The home screen: folders, not a wall of tools. Each folder opens into its own list,
+ * so the home screen stays the same length however many tools the app grows. There
+ * are no ads here: they appear inside a folder, among its tools, once it is opened.
+ */
 export const HomeScreen = ({navigation}: Props) => {
   const styles = useStyles();
-  const [group, setGroup] = useState<Tool['group'] | 'All'>('All');
 
-  // Two cards side by side on a phone, more when there is room — a rotated phone,
-  // a foldable opened out, a tablet. Fixing it at two made each card enormous and
-  // wasted most of a wide screen. 190 is about the narrowest a card reads well at.
+  // Two folders side by side on a phone, more when there is room — a rotated phone,
+  // a foldable opened out, a tablet.
   const {width} = useWindowDimensions();
   const columns = Math.min(4, Math.max(2, Math.floor(Math.min(width, 900) / 190)));
-
-  const tools = useMemo(
-    () => (group === 'All' ? TOOLS : TOOLS.filter(t => t.group === group)),
-    [group],
-  );
-
-  // Making an archive is not a conversion — it takes many files and asks for a
-  // format and a password — so it has a screen of its own rather than bending the
-  // one-file-in, one-file-out shape of the converters.
-  const open = (tool: Tool) =>
-    tool.id === 'make-archive'
-      ? navigation.navigate('MakeArchive')
-      : navigation.navigate('Convert', {toolId: tool.id});
 
   return (
     <Screen
       title="Convert a file"
       subtitle="Everything happens on your phone."
       right={<QuotaPill onPress={() => navigation.navigate('Premium')} />}
-      footer={<AdBanner />}>
+      footer={<BottomTabs active="Home" navigation={navigation} />}>
       <Pressable
         accessibilityRole="button"
         onPress={() => navigation.navigate('Viewer', {})}
@@ -53,37 +42,19 @@ export const HomeScreen = ({navigation}: Props) => {
         <Text style={styles.viewerChevron}>›</Text>
       </Pressable>
 
-      <View style={styles.filters}>
-        {(['All', ...GROUPS] as const).map(g => {
-          const active = group === g;
-          return (
-            <Pressable
-              key={g}
-              accessibilityRole="button"
-              onPress={() => setGroup(g)}
-              style={[styles.filter, active && styles.filterActive]}>
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>{g}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Animated.View key={group} entering={FadeIn.duration(220)} style={styles.grid}>
-        {tools.map((tool, i) => (
-          <View key={tool.id} style={[styles.cell, {width: `${100 / columns}%`}]}>
-            <ToolCard tool={tool} index={i} onPress={open} />
+      <View style={styles.grid}>
+        {FOLDERS.map((folder, i) => (
+          <View key={folder.id} style={[styles.cell, {width: `${100 / columns}%`}]}>
+            <FolderCard
+              folder={folder}
+              count={toolsInFolder(folder).length}
+              index={i}
+              onPress={f => navigation.navigate('Folder', {folderId: f.id})}
+            />
           </View>
         ))}
-      </Animated.View>
-
-      <View style={styles.links}>
-        <Pressable onPress={() => navigation.navigate('History')} style={styles.link}>
-          <Text style={styles.linkText}>Recent files</Text>
-        </Pressable>
-        <Pressable onPress={() => navigation.navigate('Settings')} style={styles.link}>
-          <Text style={styles.linkText}>Settings</Text>
-        </Pressable>
       </View>
+
     </Screen>
   );
 };
@@ -103,27 +74,6 @@ const useStyles = makeStyles(palette => StyleSheet.create({
   viewerTitle: {...type.section, color: palette.ink},
   viewerHint: {...type.caption, color: palette.inkFaint},
   viewerChevron: {...type.title, color: palette.inkFaint},
-  filters: {flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginBottom: space.lg},
-  filter: {
-    paddingHorizontal: space.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: palette.surface,
-    borderWidth: 1,
-    borderColor: palette.hairline,
-  },
-  filterActive: {backgroundColor: palette.ink, borderColor: palette.ink},
-  filterText: {...type.caption, color: palette.inkSoft},
-  filterTextActive: {color: palette.canvas},
   grid: {flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -space.sm / 2},
   cell: {paddingHorizontal: space.sm / 2, paddingBottom: space.md},
-  links: {flexDirection: 'row', gap: space.md, marginTop: space.sm},
-  link: {
-    flex: 1,
-    paddingVertical: space.lg,
-    borderRadius: radius.card,
-    backgroundColor: palette.surfaceSunk,
-    alignItems: 'center',
-  },
-  linkText: {...type.section, color: palette.ink},
 }));

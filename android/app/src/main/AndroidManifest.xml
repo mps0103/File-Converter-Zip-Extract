@@ -12,6 +12,16 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!--
+        react-native-blob-util, which the PDF reader needs for its cache, declares storage,
+        Wi-Fi and download permissions of its own. This app reads files through the system
+        picker and writes through MediaStore, so none of them is needed, and broad storage
+        access in particular is something Play asks about. They are taken back out here.
+    -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" tools:node="remove" />
+
     <!-- Lets the "Open file" button find a viewer without asking for package visibility. -->
     <queries>
         <intent>
@@ -153,6 +163,78 @@
                 <data android:pathPattern=".*\.TXT" />
                 <data android:pathPattern=".*\.HTML" />
                 <data android:pathPattern=".*\.HTM" />
+            </intent-filter>
+
+            <!--
+                "Open with" for pictures, sound and video, so this app is offered for
+                anything it can edit and not only for what it can read. A file opened
+                this way lands on a screen listing the tools that apply to it. Same
+                two-filter shape as above: real MIME types first, then the file name
+                for providers that report application/octet-stream.
+            -->
+            <intent-filter android:label="File Converter">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
+            <intent-filter android:label="File Converter">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\.mp4" />
+                <data android:pathPattern=".*\.mkv" />
+                <data android:pathPattern=".*\.mov" />
+                <data android:pathPattern=".*\.webm" />
+                <data android:pathPattern=".*\.3gp" />
+                <data android:pathPattern=".*\.avi" />
+                <data android:pathPattern=".*\.m4v" />
+                <data android:pathPattern=".*\.mp3" />
+                <data android:pathPattern=".*\.m4a" />
+                <data android:pathPattern=".*\.aac" />
+                <data android:pathPattern=".*\.wav" />
+                <data android:pathPattern=".*\.flac" />
+                <data android:pathPattern=".*\.ogg" />
+                <data android:pathPattern=".*\.opus" />
+                <data android:pathPattern=".*\.amr" />
+                <data android:pathPattern=".*\.jpg" />
+                <data android:pathPattern=".*\.jpeg" />
+                <data android:pathPattern=".*\.png" />
+                <data android:pathPattern=".*\.webp" />
+                <data android:pathPattern=".*\.heic" />
+                <data android:pathPattern=".*\.heif" />
+                <data android:pathPattern=".*\.bmp" />
+                <data android:pathPattern=".*\.gif" />
+                <data android:pathPattern=".*\.MP4" />
+                <data android:pathPattern=".*\.MKV" />
+                <data android:pathPattern=".*\.MOV" />
+                <data android:pathPattern=".*\.WEBM" />
+                <data android:pathPattern=".*\.3GP" />
+                <data android:pathPattern=".*\.AVI" />
+                <data android:pathPattern=".*\.M4V" />
+                <data android:pathPattern=".*\.MP3" />
+                <data android:pathPattern=".*\.M4A" />
+                <data android:pathPattern=".*\.AAC" />
+                <data android:pathPattern=".*\.WAV" />
+                <data android:pathPattern=".*\.FLAC" />
+                <data android:pathPattern=".*\.OGG" />
+                <data android:pathPattern=".*\.OPUS" />
+                <data android:pathPattern=".*\.AMR" />
+                <data android:pathPattern=".*\.JPG" />
+                <data android:pathPattern=".*\.JPEG" />
+                <data android:pathPattern=".*\.PNG" />
+                <data android:pathPattern=".*\.WEBP" />
+                <data android:pathPattern=".*\.HEIC" />
+                <data android:pathPattern=".*\.HEIF" />
+                <data android:pathPattern=".*\.BMP" />
+                <data android:pathPattern=".*\.GIF" />
             </intent-filter>
         </activity>
 

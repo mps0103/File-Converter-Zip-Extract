@@ -5,6 +5,7 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {Screen} from '@/components/Screen';
 import {AdBanner} from '@/components/AdBanner';
+import {BottomTabs} from '@/components/BottomTabs';
 import {AppDialog} from '@/components/AppDialog';
 import {FileGlyph} from '@/components/FileGlyph';
 import {toolById} from '@/convert/catalog';
@@ -75,7 +76,12 @@ export const HistoryScreen = ({navigation}: Props) => {
     <Screen
       title="Recent files"
       subtitle="Files this app made, and files you opened in the viewer."
-      footer={<AdBanner />}>
+      footer={
+        <>
+          <AdBanner />
+          <BottomTabs active="History" navigation={navigation} />
+        </>
+      }>
       {history.length === 0 ? (
         <View style={styles.empty}>
           <FileGlyph ink="text" label="new" size={54} />

@@ -3,6 +3,8 @@ import {NavigationContainer, DarkTheme, DefaultTheme} from '@react-navigation/na
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
 import {HomeScreen} from '@/screens/HomeScreen';
+import {OpenWithScreen} from '@/screens/OpenWithScreen';
+import {FolderScreen} from '@/screens/FolderScreen';
 import {ConvertScreen} from '@/screens/ConvertScreen';
 import {ResultScreen} from '@/screens/ResultScreen';
 import {MakeArchiveScreen} from '@/screens/MakeArchiveScreen';
@@ -45,13 +47,15 @@ export const RootNavigator = () => {
           animation: 'slide_from_right',
           contentStyle: {backgroundColor: palette.canvas},
         }}>
-        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Home" component={HomeScreen} options={{animation: 'none'}} />
+        <Stack.Screen name="Folder" component={FolderScreen} />
+        <Stack.Screen name="OpenWith" component={OpenWithScreen} />
         <Stack.Screen name="Convert" component={ConvertScreen} />
         <Stack.Screen name="Result" component={ResultScreen} options={{animation: 'fade_from_bottom'}} />
         <Stack.Screen name="MakeArchive" component={MakeArchiveScreen} />
         <Stack.Screen name="Premium" component={PremiumScreen} options={{animation: 'slide_from_bottom'}} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="History" component={HistoryScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} options={{animation: 'none'}} />
+        <Stack.Screen name="History" component={HistoryScreen} options={{animation: 'none'}} />
         <Stack.Screen name="Viewer" component={ViewerScreen} />
       </Stack.Navigator>
     </NavigationContainer>

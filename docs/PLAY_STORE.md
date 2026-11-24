@@ -7,44 +7,93 @@ Package: `com.mps.fileconverter` · Category: Tools · Content rating target: Ev
 **App name (30 char max)**
 `File Converter: PDF Word Zip`
 
-**Short description (80 char max)**
-`Convert PDF, Word, Excel and open ZIP files offline. Nothing is uploaded.`
+**Short description (80 char max, this one is 72)**
+`53 offline tools: PDF, image, video, audio and ZIP. Nothing is uploaded.`
 
-**Full description**
+**Full description (4000 char max, this one is 2,083)**
 
 ```
-Convert your documents without sending them anywhere.
+Convert, edit and compress your files without sending them anywhere.
 
-File Converter & Zip Extract does every conversion on your phone. Turn it on in airplane mode and it still works. Nothing is uploaded, so nothing can leak.
+File Converter & Zip Extract is 53 tools in one app, and every one runs on your phone. Turn on airplane mode and it still works. Nothing is uploaded, so nothing can leak.
 
-WHAT IT CONVERTS
+Tools are sorted into folders: PDF tools, To & from PDF, Pictures, Video, Audio, Documents & sheets and Archives. Open a photo, song, video or PDF from any app and choose "File Converter" to see only the tools that fit it.
+
+PDF TOOLS
+• Merge, split, rotate and delete pages
+• Add page numbers and watermarks
+• Lock a PDF with a password, or remove one you know
+• Compress a PDF, turn pages into pictures, pull out the pictures inside
+• Make a scanned PDF searchable — the text is read on your phone
+• A built-in reader: pinch to zoom, jump to a page, open locked files
+
+CONVERT DOCUMENTS
 • PDF to Word, Excel or text
-• Word to PDF or plain text
-• Excel and CSV to PDF, CSV to Excel, Excel to CSV
-• PowerPoint slides to PDF
-• Text and HTML to PDF
+• Word, Excel, CSV, PowerPoint slides and text to PDF
+• Scan paper with the camera, or turn photos into a PDF
+
+PICTURES
+• Convert between JPG, PNG, WEBP and HEIC
+• Resize, compress, crop, rotate, flip, make black and white
+• Change resolution or DPI
+• Read text out of a picture
+
+VIDEO
+• Convert to MP4, compress, change resolution
+• Trim, merge, rotate, mute, or take the sound out as MP3
+
+AUDIO
+• Convert between MP3, M4A, AAC and WAV
+• Trim, merge, change volume, fade in and out, change bit rate
+• Make a ringtone from any song
 
 ARCHIVES
-• Open ZIP, 7Z, TAR, TAR.GZ, TGZ, GZ, BZ2, XZ and older RAR files
-• Password-protected ZIP files supported
-• Everything unpacks into a folder in Downloads
+• Open ZIP, 7Z, TAR, TAR.GZ, GZ, BZ2, XZ and older RAR files, including password-protected ZIPs
+• Make ZIP, 7Z and TAR archives
 
 WHERE FILES GO
-Every converted file is saved straight to your Downloads folder, with the original left untouched. Open or share it from the app, or find it later in any file manager.
+Every result is saved to your Downloads folder, with the original left untouched. Open or share it from the app, or find it later in any file manager.
 
 HONEST ABOUT QUALITY
-Each tool tells you plainly what carries over before you convert. A scanned PDF has no text inside it to pull out, and we say so instead of handing you an empty file.
+Each tool says plainly what carries over before you start. If a scan has no readable text, we tell you instead of handing you an empty file. Video and audio need a phone that can read the original format.
 
 FREE AND PREMIUM
-Start with a batch of free conversions. Premium removes the limit and every ad, as a monthly subscription or a single one-time payment.
+Start with 10 free conversions. Premium removes the limit and every ad, monthly or as a single one-time payment.
 
 Questions: info@dealtrix.com
+```
+
+**What's new in 2.0.0 (500 char max, this is 454)**
+
+```
+2.0.0 is the biggest update yet: 53 tools, all offline.
+• New: image tools (convert, resize, compress, crop, rotate, read text)
+• New: video tools (convert, compress, trim, merge, rotate, mute)
+• New: audio tools (MP3, trim, merge, volume, fade, ringtones)
+• New: PDF page numbers, watermark, searchable scans, pictures out of PDFs
+• Tools sorted into folders, and a PDF reader that opens locked files
+• Open With: send any photo, song, video or PDF here
 ```
 
 **Graphics to prepare**
 - App icon 512×512 — `assets/play-store-icon-512.png`
 - Feature graphic 1024×500
-- Phone screenshots, at least 4 (home grid, a tool screen, the progress ring, the result screen)
+- Phone screenshots: 8, in the order below
+
+**Screenshot plan** (portrait, light theme except where noted; use a clean phone with no personal files visible)
+
+| # | Capture | Caption to burn on it |
+| --- | --- | --- |
+| 1 | Home: the folder grid with the bottom tab bar | 53 tools. Nothing leaves your phone. |
+| 2 | PDF tools folder open, tiles showing | Merge, split, lock and read PDFs |
+| 3 | A tool screen mid-way: Compress video with its options and a chosen file | Shrink big videos in one tap |
+| 4 | Progress ring part-way on a conversion | Works offline — even in airplane mode |
+| 5 | Pictures folder (or Convert image with format chips) | Convert, resize and crop photos |
+| 6 | Open With screen after sharing a photo or song from a gallery | Open any file straight from any app |
+| 7 | PDF reader showing a page with "Page 3 / 12" | Read and zoom PDFs, locked ones too |
+| 8 | Result screen: "Saved to Downloads" (dark theme) | Saved to Downloads. Original untouched. |
+
+Captions: 5 to 7 words, white text on a dark band at the top, one idea per screenshot. Avoid ads in frame — capture with a premium test entitlement or on a screen with no banner.
 
 ## 2. Products to create
 
@@ -92,6 +141,8 @@ These ids must match `src/services/billing.ts` exactly, or the paywall loads emp
 
 1. Replace both test ad unit ids and the AdMob app id with the real ones (`src/services/ads.ts`, `AndroidManifest.xml`).
 2. Bump `versionCode` and `versionName` in `android/app/build.gradle` — once, at the end of a batch of changes.
-3. `npx tsc --noEmit` and confirm the app runs on a real device in airplane mode.
+3. `npx tsc --noEmit` and confirm the app runs on a real device in airplane mode, with each folder opened and at least one tool run from every folder.
 4. `cd android && gradlew bundleRelease` and upload `android/app/build/outputs/bundle/release/app-release.aab`.
-5. Check the release build opens a converted file, shows the paywall at the sixth conversion, and restores a purchase after a reinstall.
+5. Check the release build opens a converted file, shows the paywall when the free conversions run out, and restores a purchase after a reinstall.
+6. Confirm `FREE_CONVERSIONS` in `src/services/quota.ts` is back to its real value — it is raised for testing at times.
+7. Confirm every `.so` in the bundle is 16 KB aligned (`zipalign -c -P 16` on bundletool's arm64 and x86_64 APKs).

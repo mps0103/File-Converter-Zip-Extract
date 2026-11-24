@@ -4,6 +4,7 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {Screen} from '@/components/Screen';
 import {AdBanner} from '@/components/AdBanner';
+import {BottomTabs} from '@/components/BottomTabs';
 import {privacyOptionsRequired, showPrivacyOptions} from '@/services/ads';
 import {UNLOCK_TAPS, isDeveloper, lockDeveloper, unlockDeveloper} from '@/services/devMode';
 import {useApp} from '@/hooks/AppState';
@@ -106,7 +107,14 @@ export const SettingsScreen = ({navigation}: Props) => {
   ];
 
   return (
-    <Screen title="Settings" footer={<AdBanner />}>
+    <Screen
+      title="Settings"
+      footer={
+        <>
+          <AdBanner />
+          <BottomTabs active="Settings" navigation={navigation} />
+        </>
+      }>
       {/* Seven taps here open the developer unlock. Nothing marks it, because a
           user who finds it by accident should find nothing. */}
       <Pressable onPress={tapCard} style={styles.offline}>

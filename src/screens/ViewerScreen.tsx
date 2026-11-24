@@ -20,6 +20,7 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 import {Screen} from '@/components/Screen';
 import {AdBanner} from '@/components/AdBanner';
+import {PdfReader} from '@/components/PdfReader';
 import {FileGlyph} from '@/components/FileGlyph';
 import {buildPreview, previewKindFor, type Preview} from '@/convert/preview';
 import {toolById} from '@/convert/catalog';
@@ -56,6 +57,8 @@ const formatSize = (bytes: number) => {
  * reaches it.
  */
 const PAGE_WINDOW = 4;
+
+const WRONG_PASSWORD = 'That password is not right. Check it and try again.';
 
 /** How long a page must stay near the screen before it is worth drawing. */
 const RENDER_SETTLE_MS = 120;
@@ -302,6 +305,9 @@ export const ViewerScreen = ({route, navigation}: Props) => {
   const [error, setError] = useState<string | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [password, setPassword] = useState('');
+  // Shown on the password card after a try that did not work, so a wrong password is
+  // told so rather than leaving the card looking untouched.
+  const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
   const {premium, remaining, recordConversion, recordView} = useApp();
   const [extracting, setExtracting] = useState(false);
   const [percent, setPercent] = useState(0);
@@ -400,6 +406,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
     try {
       setPreview(await buildPreview(target, pass));
       setNeedsPassword(false);
+      setPasswordMsg(null);
       // Only once it has really opened — a file that failed to load is not something
       // anyone wants offered back to them in Recent files.
       recordView(target);
@@ -409,6 +416,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
     } catch (e) {
       if (isPasswordError(e)) {
         setNeedsPassword(true);
+        setPasswordMsg(pass ? WRONG_PASSWORD : null);
       } else {
         setError((e as Error).message || 'This file could not be opened.');
       }
@@ -418,13 +426,21 @@ export const ViewerScreen = ({route, navigation}: Props) => {
     }
   }, [recordView, premium]);
 
+  // `load` changes whenever the app state does (opening a file records it in Recent
+  // files, which re-creates it), so it is read through a ref. Listed as a dependency it
+  // re-ran this effect right after a good open and loaded the file again with no
+  // password, throwing the open document away.
+  const loadRef = useRef(load);
+  loadRef.current = load;
   useEffect(() => {
+    if (route.params?.notice) setError(route.params.notice);
     const incoming = route.params?.file;
     if (incoming) {
       setFile(incoming);
-      load(incoming);
+      setPassword('');
+      loadRef.current(incoming);
     }
-  }, [route.params?.file, load]);
+  }, [route.params?.file, route.params?.notice]);
 
   const pick = useCallback(async () => {
     try {
@@ -506,16 +522,31 @@ export const ViewerScreen = ({route, navigation}: Props) => {
           </Text>
           <TextInput
             value={password}
-            onChangeText={setPassword}
+            onChangeText={v => {
+              setPassword(v);
+              setPasswordMsg(null);
+            }}
             placeholder="Password"
             placeholderTextColor={palette.inkFaint}
             secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            onSubmitEditing={() => file && password && load(file, password)}
             style={styles.input}
           />
+          {passwordMsg ? <Text style={styles.wrong}>{passwordMsg}</Text> : null}
           <Pressable
+            accessibilityRole="button"
+            disabled={!password}
             onPress={() => file && load(file, password)}
-            style={({pressed}) => [styles.action, pressed && styles.pressed]}>
+            style={({pressed}) => [styles.action, !password && styles.disabled, pressed && styles.pressed]}>
             <Text style={styles.actionText}>Open it</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home'))}
+            style={({pressed}) => [styles.cancel, pressed && styles.pressed]}>
+            <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
         </View>
       );
@@ -552,47 +583,14 @@ export const ViewerScreen = ({route, navigation}: Props) => {
     }
 
     if (preview.kind === 'pdf') {
-      return (
-        <View
-          style={styles.pages}
-          onLayout={e => {
-            pagesTop.current = e.nativeEvent.layout.y;
-            measureWindow();
-          }}>
-          <Text style={styles.zoomTip}>Tap a page to zoom in</Text>
-          {Array.from({length: preview.pageCount}, (_, i) => (
-            <Pressable
-              key={i}
-              onPress={() => setZoomPage(i)}
-              onLayout={e =>
-                onPageLayout(i, e.nativeEvent.layout.y, e.nativeEvent.layout.height)
-              }>
-              <Text style={styles.pageLabel}>
-                Page {i + 1} of {preview.pageCount}
-              </Text>
-              <PdfPage
-                uri={file.uri}
-                index={i}
-                width={pageWidth}
-                password={password}
-                // Near the screen, and the app still on it. Away covers both the
-                // user leaving and Android asking for memory back, and a page that
-                // is not active holds no image at all.
-                active={!away && zoomPage === null && i >= pageWindow.from && i <= pageWindow.to}
-              />
-            </Pressable>
-          ))}
-          {zoomPage !== null ? (
-            <PageZoom
-              uri={file.uri}
-              index={zoomPage}
-              pageCount={preview.pageCount}
-              password={password}
-              onClose={() => setZoomPage(null)}
-            />
-          ) : null}
-        </View>
-      );
+      // The reader draws, scrolls and zooms the pages itself, so it has the screen to
+      // itself instead of sitting inside this screen's scroll view.
+      return <PdfReader file={file} password={password} onLocked={() => {
+        // The page count above already took this password, so reaching here with one
+        // typed means the reader itself turned it down.
+        setNeedsPassword(true);
+        setPasswordMsg(password ? WRONG_PASSWORD : null);
+      }} />;
     }
 
     if (preview.kind === 'archive') {
@@ -693,7 +691,7 @@ export const ViewerScreen = ({route, navigation}: Props) => {
     <Screen
       title="View a file"
       subtitle={file ? file.name : 'Read it without converting it'}
-      scroll={preview?.kind !== 'html' && preview?.kind !== 'sheet'}
+      scroll={preview?.kind !== 'html' && preview?.kind !== 'sheet' && preview?.kind !== 'pdf'}
       onScroll={onScroll}
       footer={<AdBanner />}>
       {file ? (
@@ -743,6 +741,10 @@ const useStyles = makeStyles(palette => StyleSheet.create({
   action: {backgroundColor: palette.ink, borderRadius: radius.pill, paddingVertical: space.md, alignItems: 'center'},
   actionText: {...type.section, color: palette.canvas},
   pressed: {opacity: 0.85},
+  disabled: {opacity: 0.4},
+  wrong: {...type.caption, color: palette.danger},
+  cancel: {paddingVertical: space.sm, alignItems: 'center'},
+  cancelText: {...type.section, color: palette.inkSoft},
   pages: {gap: space.lg},
   page: {borderRadius: radius.chip, backgroundColor: '#FFFFFF'},
   zoomTip: {...type.caption, color: palette.inkFaint, textAlign: 'center', marginBottom: space.sm},

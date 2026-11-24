@@ -65,3 +65,40 @@
 
 # Google Mobile Ads ships its own consumer rules; a blanket keep only blocked them.
 -dontwarn com.google.android.gms.**
+
+# ML Kit text recognition (the bundled model, used by "Make searchable"). Its pieces
+# are wired together at start-up by name through MlKitComponentDiscoveryService, which
+# reads the registrar class names out of the manifest. The library ships consumer
+# rules for this; the keep is a belt for a path that only runs when a user opens a
+# scanned PDF, which no startup check will ever exercise.
+-keep class com.google.mlkit.vision.text.** { *; }
+-keep class com.google.mlkit.vision.common.** { *; }
+-keep class com.google.mlkit.common.internal.** { *; }
+
+# PDFBox's font library. pdfbox.** is kept above but fontbox is a package of its own,
+# so R8 stripped AFMParser and its neighbours (seen in usage.txt). The standard PDF
+# fonts used by Page numbers and Watermark take their metrics from AFM resources
+# through it, a path no startup check exercises, so it is kept whole. The size is
+# trivial; a release-only crash on those two tools would not be.
+-keep class com.tom_roush.fontbox.** { *; }
+
+# Media3 Transformer, for the video tools. It ships consumer rules for itself; this
+# only silences warnings about optional pieces of its API that this app never uses.
+-dontwarn androidx.media3.**
+
+# LAME's JNI bridge binds Java_com_mps_fileconverter_Mp3Encoder_* by class and method
+# name, so the class and its native methods must keep theirs. They already do through
+# the com.mps.fileconverter.** rule at the top; this one says why it matters here.
+-keepclasseswithmembernames class com.mps.fileconverter.Mp3Encoder { native <methods>; }
+
+# The PDF reader (react-native-pdf, the same one the PDF Tools app uses) and the native
+# pdfium library under it. Both are reached from native code and from React Native by
+# name, so they are kept whole: this is the reader for every PDF the app opens, and the
+# one thing a release-only crash here would take down.
+-keep class org.wonday.pdf.** { *; }
+-keep class io.legere.pdfiumandroid.** { *; }
+-keep class com.shockwave.pdfium.** { *; }
+-keep class com.github.barteksc.pdfviewer.** { *; }
+-keep class com.ReactNativeBlobUtil.** { *; }
+-dontwarn io.legere.pdfiumandroid.**
+-dontwarn com.github.barteksc.pdfviewer.**

@@ -6,7 +6,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import {makeStyles, motion, radius, shadow, space, type} from '@/theme';
+import {makeStyles, motion, radius, shadow, space, type, useTheme} from '@/theme';
 import {GradientButton} from './GradientButton';
 
 export type DialogAction = {
@@ -25,8 +25,18 @@ type Props = {
   onDismiss?: () => void;
 };
 
+/**
+ * The main button's colours when a dialog does not choose its own. A fixed purple was
+ * right on paper and too dark on the dark card, so each theme has its own pair.
+ */
+const PRIMARY: Record<'light' | 'dark', [string, string]> = {
+  light: ['#6D5BE0', '#3B2F9E'],
+  dark: ['#8F7FFF', '#5B4BDB'],
+};
+
 export const AppDialog = ({visible, title, message, icon, actions, onDismiss}: Props) => {
   const styles = useStyles();
+  const {name} = useTheme();
   const enter = useSharedValue(0);
 
   useEffect(() => {
@@ -59,7 +69,7 @@ export const AppDialog = ({visible, title, message, icon, actions, onDismiss}: P
                 key={a.label}
                 label={a.label}
                 subtle={a.subtle}
-                colors={a.colors ?? ['#6D5BE0', '#3B2F9E']}
+                colors={a.colors ?? PRIMARY[name]}
                 onPress={a.onPress}
                 height={48}
                 style={styles.action}

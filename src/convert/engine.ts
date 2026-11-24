@@ -6,13 +6,20 @@ import {Document, HeadingLevel, Packer, Paragraph, TextRun} from 'docx';
 import {
   ArchiveBridge,
   FileBridge,
+  ImageEditBridge,
+  MediaEditBridge,
+  PdfEditBridge,
   PdfToolsBridge,
   onArchiveProgress,
+  onImageEditProgress,
+  onMediaEditProgress,
+  onPdfEditProgress,
   onPdfToolsProgress,
+  type PdfEditResult,
   type PickedFile,
   type SavedFile,
 } from '@/native/FileBridge';
-import {MIME, type Tool, type ToolId} from './catalog';
+import {MIME, type OptionValues, type Tool, type ToolId} from './catalog';
 import {
   b64ToBytes,
   b64ToText,
@@ -28,6 +35,8 @@ export type Progress = (percent: number, label: string) => void;
 export type ConvertOptions = {
   /** For a protected ZIP, and for a PDF that is locked. */
   password?: string;
+  /** What the tool's own settings were set to, keyed as the catalog names them. */
+  values?: OptionValues;
 };
 
 export type ConvertResult = {
@@ -331,14 +340,475 @@ const scanToPdf = async (p: Progress): Promise<ConvertResult> => {
   return {files: [saved]};
 };
 
+// ------------------------------------------------------------------ PDF tools
+
+/**
+ * Runs one native PDF edit with its progress wired to the ring.
+ *
+ * The native side reports a page or file at a time as it really finishes it, so the
+ * ring is only ever as far along as the work is. Everything that is not a page
+ * count — opening, saving — is left to the short stretches either side of 12–92.
+ */
+const withPdfProgress = async (
+  p: Progress,
+  run: () => Promise<PdfEditResult>,
+): Promise<PdfEditResult> => {
+  const off = onPdfEditProgress(({done, total, stage}) => {
+    p(12 + Math.round((done / Math.max(total, 1)) * 80), stage);
+  });
+  try {
+    return await run();
+  } finally {
+    off();
+  }
+};
+
+const text = (o: ConvertOptions, key: string) => String(o.values?.[key] ?? '').trim();
+const whole = (o: ConvertOptions, key: string, fallback: number) => {
+  const n = parseInt(text(o, key), 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+const choice = (o: ConvertOptions, key: string, fallback: string | number | boolean) => o.values?.[key] ?? fallback;
+
+const human = (bytes: number) =>
+  bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
+const pdfEdit = async (
+  tool: Tool,
+  files: PickedFile[],
+  p: Progress,
+  o: ConvertOptions,
+): Promise<ConvertResult> => {
+  const file = files[0];
+  const uri = file.uri;
+  const base = stripExtension(file.name) || 'Document';
+  const pw = o.password ?? '';
+  p(10, 'Opening the PDF');
+
+  const res = await withPdfProgress(p, async () => {
+    switch (tool.id) {
+      case 'pdf-merge':
+        if (files.length < 2) throw new Error('Choose at least two PDFs to merge.');
+        return PdfEditBridge.merge(files.map(f => f.uri), base);
+      case 'pdf-split':
+        return PdfEditBridge.split(
+          uri,
+          pw,
+          String(choice(o, 'mode', 'each')),
+          whole(o, 'every', 2),
+          text(o, 'ranges'),
+          base,
+        );
+      case 'pdf-delete-pages':
+        return PdfEditBridge.deletePages(uri, pw, text(o, 'ranges'), base);
+      case 'pdf-rotate':
+        return PdfEditBridge.rotate(uri, pw, Number(choice(o, 'degrees', 90)), text(o, 'ranges'), base);
+      case 'pdf-page-numbers':
+        return PdfEditBridge.pageNumbers(uri, pw, String(choice(o, 'position', 'bottom-center')), whole(o, 'start', 1), base);
+      case 'pdf-watermark':
+        return PdfEditBridge.watermark(
+          uri,
+          pw,
+          text(o, 'text'),
+          Number(choice(o, 'opacity', 25)),
+          choice(o, 'diagonal', true) === true,
+          base,
+        );
+      case 'pdf-protect':
+        return PdfEditBridge.protect(
+          uri,
+          pw,
+          String(o.values?.newPassword ?? ''),
+          choice(o, 'allowPrint', true) === true,
+          choice(o, 'allowCopy', false) === true,
+          base,
+        );
+      case 'pdf-unlock':
+        return PdfEditBridge.unlock(uri, pw, base);
+      case 'pdf-compress':
+        return PdfEditBridge.compress(uri, pw, String(choice(o, 'level', 'balanced')), base);
+      case 'pdf-to-images':
+        return PdfEditBridge.toImages(uri, pw, String(choice(o, 'format', 'jpg')), Number(choice(o, 'dpi', 150)), base);
+      case 'pdf-extract-images':
+        return PdfEditBridge.extractImages(uri, pw, base);
+      case 'pdf-searchable':
+        return PdfEditBridge.makeSearchable(uri, pw, base);
+      default:
+        throw new Error('That tool is not handled here.');
+    }
+  });
+
+  p(94, 'Saved to Downloads');
+  let warning: string | undefined;
+  if (tool.id === 'pdf-compress' && res.bytesBefore != null && res.bytesAfter != null) {
+    warning =
+      res.bytesAfter >= res.bytesBefore
+        ? 'This PDF could not be made any smaller — it is mostly text or already compressed — so the original was saved as it is.'
+        : `${human(res.bytesBefore)} → ${human(res.bytesAfter)}, ${Math.round((1 - res.bytesAfter / res.bytesBefore) * 100)}% smaller.`;
+  } else if (tool.id === 'pdf-searchable' && (res.emptyPages ?? 0) > 0) {
+    // Nothing at all found is refused by the native side; this is the pages in between.
+    warning = `${res.emptyPages} page${res.emptyPages === 1 ? '' : 's'} had no recognisable text and ${res.emptyPages === 1 ? 'is' : 'are'} not searchable.`;
+  } else if (res.files.length > 12) {
+    warning = `${res.files.length} files were saved into ${res.folder}.`;
+  }
+  return {files: res.files, warning};
+};
+
+// ------------------------------------------------------------------ image tools
+
+/** Words added to a file's name so a result never overwrites what it came from. */
+const IMAGE_SUFFIX: Partial<Record<ToolId, string>> = {
+  'image-convert': 'converted',
+  'image-resize': 'resized',
+  'image-compress': 'compressed',
+  'image-crop': 'cropped',
+  'image-rotate': 'rotated',
+  'image-flip': 'flipped',
+  'image-resolution': 'resolution',
+  'image-grayscale': 'bw',
+};
+
+/**
+ * One native job over every picture. The native side reports each picture as it is
+ * really finished, so the ring moves one step per picture and no faster.
+ */
+const imageEdit = async (
+  tool: Tool,
+  files: PickedFile[],
+  p: Progress,
+  o: ConvertOptions,
+): Promise<ConvertResult> => {
+  const uris = files.map(f => f.uri);
+  const base = stripExtension(files[0].name) || 'Pictures';
+  const off = onImageEditProgress(({done, total, stage}) => {
+    p(12 + Math.round((done / Math.max(total, 1)) * 80), stage);
+  });
+  p(10, 'Opening the pictures');
+  try {
+    if (tool.id === 'image-ocr') {
+      const res = await ImageEditBridge.recognizeText(uris, base);
+      p(94, 'Saved to Downloads');
+      return {
+        files: res.files,
+        warning:
+          res.count === 0
+            ? 'No text was found. The picture may be handwriting, a script other than Latin, or too blurred to read.'
+            : undefined,
+      };
+    }
+
+    const opts: Record<string, string | number | boolean> = {
+      suffix: IMAGE_SUFFIX[tool.id] ?? 'edited',
+      folder: `${tool.title} pictures`,
+      format: String(choice(o, 'format', 'same')),
+    };
+    switch (tool.id) {
+      case 'image-convert':
+        opts.quality = Number(choice(o, 'quality', 85));
+        break;
+      case 'image-resize':
+        if (choice(o, 'by', 'percent') === 'pixels') {
+          const w = whole(o, 'width', 0);
+          const h = whole(o, 'height', 0);
+          if (w <= 0 && h <= 0) throw new Error('Type a width, a height, or both.');
+          opts.width = w;
+          opts.height = h;
+          opts.keepAspect = choice(o, 'keepAspect', true) === true;
+        } else {
+          opts.scale = Number(choice(o, 'scale', 50));
+        }
+        break;
+      case 'image-compress':
+        opts.quality = Number(choice(o, 'quality', 70));
+        opts.maxEdge = Number(choice(o, 'maxEdge', 0));
+        break;
+      case 'image-crop':
+        opts.aspect = String(choice(o, 'aspect', '1:1'));
+        opts.anchor = String(choice(o, 'anchor', 'center'));
+        break;
+      case 'image-rotate':
+        opts.rotate = Number(choice(o, 'rotate', 90));
+        break;
+      case 'image-flip':
+        opts.flipH = choice(o, 'flip', 'h') === 'h';
+        opts.flipV = choice(o, 'flip', 'h') === 'v';
+        break;
+      case 'image-resolution':
+        if (choice(o, 'mode', 'pixels') === 'dpi') {
+          opts.dpi = Number(choice(o, 'dpi', 300));
+          opts.dpiOnly = true;
+        } else {
+          opts.maxEdge = Number(choice(o, 'maxEdge', 1920));
+        }
+        break;
+      case 'image-grayscale':
+        opts.grayscale = true;
+        break;
+    }
+
+    const res = await ImageEditBridge.process(uris, opts);
+    p(94, 'Saved to Downloads');
+    let warning: string | undefined;
+    if (tool.id === 'image-compress' && res.bytesBefore && res.bytesAfter != null) {
+      warning =
+        res.bytesAfter >= res.bytesBefore
+          ? 'These pictures were already small, so they did not get smaller.'
+          : `${human(res.bytesBefore)} → ${human(res.bytesAfter)}, ${Math.round((1 - res.bytesAfter / res.bytesBefore) * 100)}% smaller.`;
+    } else if (res.files.length > 12) {
+      warning = `${res.files.length} pictures were saved into ${res.folder}.`;
+    }
+    return {files: res.files, warning};
+  } finally {
+    off();
+  }
+};
+
+// ------------------------------------------------------------ audio and video
+
+type MediaOpts = Record<string, string | number | boolean>;
+
+/** "90", "1:30" or "1:02:03.5" as milliseconds. Empty is 0; nonsense is an error. */
+const clockToMs = (raw: string, what: string): number => {
+  const t = raw.trim();
+  if (!t) return 0;
+  if (!/^\d+(\.\d+)?(:\d{1,2}(\.\d+)?){0,2}$/.test(t)) {
+    throw new Error(`"${t}" is not a time for ${what}. Use seconds, or minutes and seconds such as 1:30.`);
+  }
+  const parts = t.split(':').map(Number);
+  return Math.round(parts.reduce((total, part) => total * 60 + part, 0) * 1000);
+};
+
+const MEDIA_SUFFIX: Partial<Record<ToolId, string>> = {
+  'video-convert': 'converted',
+  'video-compress': 'compressed',
+  'video-to-audio': 'audio',
+  'video-merge': 'merged',
+  'video-trim': 'trimmed',
+  'video-rotate': 'rotated',
+  'video-resolution': 'resized',
+  'video-mute': 'muted',
+  'audio-convert': 'converted',
+  'audio-compress': 'compressed',
+  'audio-trim': 'trimmed',
+  'audio-merge': 'merged',
+  ringtone: 'ringtone',
+  'audio-volume': 'volume',
+  'audio-fade': 'faded',
+  'audio-bitrate': 'bitrate',
+};
+
+/** Compression levels: the tallest picture kept, and the video bit rate aimed for. */
+const VIDEO_LEVELS: Record<string, {maxHeight: number; videoBitrate: number}> = {
+  light: {maxHeight: 1080, videoBitrate: 4_000_000},
+  balanced: {maxHeight: 720, videoBitrate: 2_000_000},
+  strong: {maxHeight: 480, videoBitrate: 900_000},
+};
+
+/**
+ * Audio and video jobs. Most take one file at a time and are repeated for each file
+ * the user added; merging takes them all at once. Progress is the real position of
+ * the file being worked on, spread across however many files there are.
+ */
+const mediaEdit = async (
+  tool: Tool,
+  files: PickedFile[],
+  p: Progress,
+  o: ConvertOptions,
+): Promise<ConvertResult> => {
+  const joins = tool.id === 'video-merge' || tool.id === 'audio-merge';
+  if (joins && files.length < 2) throw new Error('Choose at least two files to join.');
+  const isVideoJob = tool.id.startsWith('video-') && tool.id !== 'video-to-audio';
+  const groups = joins ? [files] : files.map(f => [f]);
+
+  let index = 0;
+  const off = onMediaEditProgress(({done, total, stage}) => {
+    const share = (index + done / Math.max(total, 1)) / groups.length;
+    p(12 + Math.round(share * 80), stage);
+  });
+
+  const saved: SavedFile[] = [];
+  let before = 0;
+  let after = 0;
+  try {
+    for (index = 0; index < groups.length; index++) {
+      const group = groups[index];
+      const base = stripExtension(group[0].name) || 'Media';
+      const opts: MediaOpts = {baseName: base, suffix: MEDIA_SUFFIX[tool.id] ?? 'edited'};
+      const format = String(choice(o, 'format', 'mp3'));
+      const bitrate = Number(choice(o, 'bitrate', 192000));
+      before += group.reduce((sum, f) => sum + f.size, 0);
+
+      switch (tool.id) {
+        case 'video-convert':
+          opts.maxHeight = Number(choice(o, 'maxHeight', 0));
+          break;
+        case 'video-compress': {
+          const level = VIDEO_LEVELS[String(choice(o, 'level', 'balanced'))] ?? VIDEO_LEVELS.balanced;
+          opts.maxHeight = level.maxHeight;
+          opts.videoBitrate = level.videoBitrate;
+          break;
+        }
+        case 'video-merge': {
+          const tall = Number(choice(o, 'frame', 720));
+          const wide = Math.round((tall * 16) / 9 / 2) * 2;
+          const portrait = choice(o, 'orientation', 'landscape') === 'portrait';
+          opts.mergeWidth = portrait ? tall : wide;
+          opts.mergeHeight = portrait ? wide : tall;
+          break;
+        }
+        case 'video-trim': {
+          opts.startMs = clockToMs(text(o, 'start'), 'the start');
+          opts.endMs = clockToMs(text(o, 'end'), 'the end');
+          if (opts.endMs && opts.endMs <= opts.startMs) throw new Error('The end has to be after the start.');
+          break;
+        }
+        case 'video-rotate':
+          opts.rotate = Number(choice(o, 'rotate', 90));
+          break;
+        case 'video-resolution':
+          opts.maxHeight = Number(choice(o, 'maxHeight', 720));
+          break;
+        case 'video-mute':
+          opts.mute = true;
+          break;
+        case 'video-to-audio':
+        case 'audio-convert':
+        case 'audio-compress':
+        case 'audio-merge':
+        case 'audio-bitrate':
+          opts.format = format;
+          opts.bitrate = bitrate;
+          break;
+        case 'audio-trim': {
+          opts.format = format;
+          opts.bitrate = bitrate;
+          opts.startMs = clockToMs(text(o, 'start'), 'the start');
+          opts.endMs = clockToMs(text(o, 'end'), 'the end');
+          if (opts.endMs && opts.endMs <= opts.startMs) throw new Error('The end has to be after the start.');
+          break;
+        }
+        case 'ringtone': {
+          const start = clockToMs(text(o, 'start'), 'the start');
+          opts.format = format;
+          opts.bitrate = 192000;
+          opts.startMs = start;
+          opts.endMs = start + Number(choice(o, 'length', 20000));
+          if (choice(o, 'fade', true) === true) {
+            opts.fadeInMs = 1500;
+            opts.fadeOutMs = 1500;
+          }
+          break;
+        }
+        case 'audio-volume':
+          opts.format = format;
+          opts.bitrate = bitrate;
+          opts.volume = Number(choice(o, 'volume', 150)) / 100;
+          break;
+        case 'audio-fade':
+          opts.format = format;
+          opts.bitrate = bitrate;
+          opts.fadeInMs = Number(choice(o, 'fadeIn', 3)) * 1000;
+          opts.fadeOutMs = Number(choice(o, 'fadeOut', 3)) * 1000;
+          break;
+      }
+
+      p(12 + Math.round((index / groups.length) * 80), `Opening ${base}`);
+      const uris = group.map(f => f.uri);
+      const res = isVideoJob ? await MediaEditBridge.video(uris, opts) : await MediaEditBridge.audio(uris, opts);
+      saved.push(...res.files);
+      after += res.bytesAfter ?? 0;
+    }
+  } finally {
+    off();
+  }
+
+  p(94, 'Saved to Downloads');
+  let warning: string | undefined;
+  if (tool.id === 'video-compress' && before > 0 && after > 0) {
+    warning =
+      after >= before
+        ? 'These videos were already small, so they did not get smaller.'
+        : `${human(before)} → ${human(after)}, ${Math.round((1 - after / before) * 100)}% smaller.`;
+  } else if (tool.id === 'ringtone') {
+    warning = 'Saved to Downloads. Open it from there, or pick it in your phone sound settings, to use it as a ringtone.';
+  }
+  return {files: saved, warning};
+};
+
+// ---------------------------------------------------------------------- info
+
+const clockText = (ms: number) => {
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  const two = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${m}:${two(sec)}`;
+};
+
+export type InfoRow = {label: string; value: string};
+
+/**
+ * What a file is, read without changing or saving anything. Pages for a PDF, size for
+ * a picture, length and bit rate for sound and video. A row is left out when the file
+ * does not have it rather than shown empty.
+ */
+export async function inspectFile(file: PickedFile, password: string): Promise<InfoRow[]> {
+  const name = file.name;
+  const ext = (name.includes('.') ? name.split('.').pop() ?? '' : '').toLowerCase();
+  const mime = file.mime || '';
+  const rows: InfoRow[] = [
+    {label: 'Name', value: name},
+    {label: 'Type', value: `${ext ? ext.toUpperCase() : 'Unknown'}${mime ? `  ·  ${mime}` : ''}`},
+    {label: 'Size', value: file.size ? `${human(file.size)}  (${Math.round(file.size).toLocaleString()} bytes)` : 'Unknown'},
+  ];
+
+  const isPdf = mime === 'application/pdf' || ext === 'pdf';
+  const isImage = mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif', 'gif', 'bmp'].includes(ext);
+  const isMedia =
+    mime.startsWith('audio/') ||
+    mime.startsWith('video/') ||
+    ['mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg', 'opus', 'amr', 'mp4', 'mkv', 'mov', 'webm', '3gp'].includes(ext);
+
+  if (isPdf) {
+    rows.push({label: 'Pages', value: String(await FileBridge.pdfPageCount(file.uri, password))});
+  } else if (isImage) {
+    try {
+      const {width, height} = await ImageEditBridge.dimensions(file.uri);
+      if (width > 0 && height > 0) rows.push({label: 'Dimensions', value: `${width} × ${height} px`});
+    } catch {
+      /* A picture format this phone cannot size still has its name and size. */
+    }
+  } else if (isMedia) {
+    try {
+      const m = await MediaEditBridge.probe(file.uri);
+      if (m.durationMs > 0) rows.push({label: 'Length', value: clockText(m.durationMs)});
+      if (m.hasVideo && m.width > 0) rows.push({label: 'Picture', value: `${m.width} × ${m.height} px`});
+      if (m.bitrate > 0) rows.push({label: 'Bit rate', value: `${Math.round(m.bitrate / 1000)} kbps`});
+      rows.push({label: 'Tracks', value: [m.hasVideo ? 'Video' : '', m.hasAudio ? 'Audio' : ''].filter(Boolean).join(' + ') || 'None found'});
+    } catch {
+      /* Not readable as media: the basics above are still true. */
+    }
+  }
+  return rows;
+}
+
 // ------------------------------------------------------------------ dispatch
 
 export async function convert(
   tool: Tool,
   files: PickedFile[],
   options: ConvertOptions,
-  onProgress: Progress,
+  report: Progress,
 ): Promise<ConvertResult> {
+  // Every handler reports through this, so no tool can show the ring more than full or
+  // move it backwards, whatever a native count or a stage boundary does: values are held
+  // to 0–100 and only ever rise. (The label still follows the latest stage.)
+  let furthest = 0;
+  const onProgress: Progress = (pc, label) => {
+    furthest = Math.max(furthest, Math.min(100, Math.max(0, Number.isFinite(pc) ? pc : 0)));
+    report(furthest, label);
+  };
   // The scanner makes its own pages, so it is the one tool that starts with
   // nothing to point at.
   if (!files.length && !tool.capture) {
@@ -350,7 +820,7 @@ export async function convert(
   // make-archive is deliberately absent: it takes many files, a format and a
   // password, so it has its own screen and calls the native writer directly rather
   // than passing through this one-file-in, one-file-out engine.
-  const run: Record<Exclude<ToolId, 'make-archive'>, () => Promise<ConvertResult>> = {
+  const run: Record<Exclude<ToolId, 'make-archive' | 'file-info' | 'view-pdf'>, () => Promise<ConvertResult>> = {
     'pdf-to-word': () => pdfToWord(one, onProgress, options),
     'pdf-to-excel': () => pdfToExcel(one, onProgress, options),
     'pdf-to-text': () => pdfToText(one, onProgress, options),
@@ -364,6 +834,43 @@ export async function convert(
     'image-to-pdf': () => imagesToPdf(files, onProgress),
     'scan-to-pdf': () => scanToPdf(onProgress),
     'extract-archive': () => extractArchive(one, onProgress, options),
+    'pdf-merge': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-split': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-compress': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-rotate': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-delete-pages': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-page-numbers': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-watermark': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-protect': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-unlock': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-to-images': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-extract-images': () => pdfEdit(tool, files, onProgress, options),
+    'pdf-searchable': () => pdfEdit(tool, files, onProgress, options),
+    'image-convert': () => imageEdit(tool, files, onProgress, options),
+    'image-resize': () => imageEdit(tool, files, onProgress, options),
+    'image-compress': () => imageEdit(tool, files, onProgress, options),
+    'image-crop': () => imageEdit(tool, files, onProgress, options),
+    'image-rotate': () => imageEdit(tool, files, onProgress, options),
+    'image-flip': () => imageEdit(tool, files, onProgress, options),
+    'image-resolution': () => imageEdit(tool, files, onProgress, options),
+    'image-grayscale': () => imageEdit(tool, files, onProgress, options),
+    'image-ocr': () => imageEdit(tool, files, onProgress, options),
+    'video-convert': () => mediaEdit(tool, files, onProgress, options),
+    'video-compress': () => mediaEdit(tool, files, onProgress, options),
+    'video-to-audio': () => mediaEdit(tool, files, onProgress, options),
+    'video-merge': () => mediaEdit(tool, files, onProgress, options),
+    'video-trim': () => mediaEdit(tool, files, onProgress, options),
+    'video-rotate': () => mediaEdit(tool, files, onProgress, options),
+    'video-resolution': () => mediaEdit(tool, files, onProgress, options),
+    'video-mute': () => mediaEdit(tool, files, onProgress, options),
+    'audio-convert': () => mediaEdit(tool, files, onProgress, options),
+    'audio-compress': () => mediaEdit(tool, files, onProgress, options),
+    'audio-trim': () => mediaEdit(tool, files, onProgress, options),
+    'audio-merge': () => mediaEdit(tool, files, onProgress, options),
+    ringtone: () => mediaEdit(tool, files, onProgress, options),
+    'audio-volume': () => mediaEdit(tool, files, onProgress, options),
+    'audio-fade': () => mediaEdit(tool, files, onProgress, options),
+    'audio-bitrate': () => mediaEdit(tool, files, onProgress, options),
   };
 
   const step = run[tool.id as keyof typeof run];

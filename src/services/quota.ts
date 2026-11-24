@@ -5,8 +5,7 @@ import {getCredits, spendCredit} from './credits';
  * Conversions a new user gets before the paywall appears. Extracting an archive
  * counts as one; viewing never does, because the viewer is free.
  *
- * The free allowance is kept intentionally low for testing and promotion, and
- * every screen that mentions the allowance reads it from here.
+ * Every screen that mentions the allowance reads it from here.
  */
 export const FREE_CONVERSIONS = 10;
 

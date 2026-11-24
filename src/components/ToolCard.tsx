@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import {makeStyles, motion, radius, shadow, space, type} from '@/theme';
 import type {Tool} from '@/convert/catalog';
-import {FileGlyph} from './FileGlyph';
+import {ToolIcon} from './ToolIcon';
 
 type Props = {tool: Tool; index: number; onPress: (tool: Tool) => void};
 
@@ -34,7 +34,7 @@ export const ToolCard = ({tool, index, onPress}: Props) => {
         onPressOut={() => (pressed.value = 0)}
         onPress={() => onPress(tool)}
         style={[styles.card, shadow(1)]}>
-        <FileGlyph ink={tool.ink} label={tool.to.split(' ')[0]} size={40} />
+        <ToolIcon toolId={tool.id} ink={tool.ink} size={48} />
         <View style={styles.text}>
           <Text style={styles.title} numberOfLines={2}>
             {tool.title}

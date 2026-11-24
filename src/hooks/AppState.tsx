@@ -25,8 +25,31 @@ import {
 import type {SavedFile} from '@/native/FileBridge';
 import type {ToolId} from '@/convert/catalog';
 
+/**
+ * How far the start-up work has really got: whole steps finished out of the steps
+ * there are, and the one being worked on. Nothing here is timed — a step is done
+ * when the thing it names has finished, or has been given up on after a cap.
+ */
+export type Startup = {done: number; total: number; label: string};
+
+/**
+ * The longest a start-up step may hold the app. Billing and ads both talk to Google
+ * and a phone with no signal, or an ad consent form waiting for an answer, would
+ * otherwise hold the whole app on this screen. The cap only decides when to stop
+ * waiting; it is not progress, and the step still counts as done when it passes.
+ */
+const BILLING_WAIT_MS = 4000;
+const ADS_WAIT_MS = 5000;
+
+/** Most rows one conversion adds to Recent files. */
+const MAX_HISTORY_PER_RUN = 5;
+
+const settleWithin = (work: Promise<unknown>, ms: number) =>
+  Promise.race([work.catch(() => undefined), new Promise(resolve => setTimeout(resolve, ms))]);
+
 type Ctx = {
   ready: boolean;
+  startup: Startup;
   entitlement: Entitlement;
   premium: boolean;
   used: number;
@@ -49,8 +72,16 @@ type Ctx = {
 
 const AppContext = createContext<Ctx | null>(null);
 
-export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
+export const AppStateProvider = ({
+  children,
+  start = true,
+}: {
+  children: React.ReactNode;
+  /** Held false while the splash is up, so start-up begins when the splash ends. */
+  start?: boolean;
+}) => {
   const [ready, setReady] = useState(false);
+  const [startup, setStartup] = useState<Startup>({done: 0, total: 5, label: 'Getting started'});
   const [entitlement, setEntitlement] = useState<Entitlement>({premium: false});
   const [testEntitlement, setTestState] = useState<TestEntitlement | null>(null);
   const [used, setUsed] = useState(0);
@@ -58,35 +89,54 @@ export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
+    const off = onEntitlementChange(setEntitlement);
+    return off;
+  }, []);
+
+  useEffect(() => {
+    if (!start) return;
     let alive = true;
+    const total = 5;
+    const report = (done: number, label: string) => alive && setStartup({done, total, label});
+
     (async () => {
-      const [cached, usedCount, items, override, earned] = await Promise.all([
-        getCachedEntitlement(),
-        getUsed(),
-        getHistory(),
-        getTestEntitlement(),
-        getCredits(),
-      ]);
+      report(0, 'Checking your plan');
+      const [cached, override] = await Promise.all([getCachedEntitlement(), getTestEntitlement()]);
       if (!alive) return;
       setEntitlement(cached);
       setTestState(override);
+
+      report(1, 'Counting your conversions');
+      const [usedCount, earned] = await Promise.all([getUsed(), getCredits()]);
+      if (!alive) return;
       setUsed(usedCount);
       setCredits(earned);
-      setHistory(items);
-      setReady(true);
 
-      // Network-backed work happens after the UI is already on screen.
-      initBilling();
+      report(2, 'Loading recent files');
+      const items = await getHistory();
+      if (!alive) return;
+      setHistory(items);
+
+      report(3, 'Connecting to Google Play');
+      await settleWithin(initBilling(), BILLING_WAIT_MS);
+      if (!alive) return;
+
       // The override decides this too, so "testing as premium" starts a session
       // with no ad SDK running at all rather than one that merely hides them.
-      if (!(override ? override === 'premium' : cached.premium)) initAds();
+      report(4, 'Preparing ads');
+      if (!(override ? override === 'premium' : cached.premium)) {
+        await settleWithin(initAds(), ADS_WAIT_MS);
+      }
+      if (!alive) return;
+
+      report(5, 'Ready');
+      setReady(true);
     })();
-    const off = onEntitlementChange(setEntitlement);
+
     return () => {
       alive = false;
-      off();
     };
-  }, []);
+  }, [start]);
 
   // A debug override shadows whatever billing reported, so every premium gate in
   // the app — banner, interstitial, quota, paywall — follows it from this one spot.
@@ -109,7 +159,12 @@ export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
       setCredits(await getCredits());
       setHistory(
         await addHistory(
-          files.map(f => ({toolId, name: f.name, path: f.path, uri: f.uri, mime: f.mime})),
+          // A tool can make hundreds of files (every page of a long PDF as a picture).
+          // The list holds 40 rows, so one run must not be able to push out all the rest;
+          // the files themselves are all in Downloads.
+          files
+            .slice(0, MAX_HISTORY_PER_RUN)
+            .map(f => ({toolId, name: f.name, path: f.path, uri: f.uri, mime: f.mime})),
         ),
       );
     },
@@ -152,6 +207,7 @@ export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
   const value = useMemo<Ctx>(
     () => ({
       ready,
+      startup,
       entitlement: testEntitlement ? {premium} : entitlement,
       premium,
       used,
@@ -170,6 +226,7 @@ export const AppStateProvider = ({children}: {children: React.ReactNode}) => {
     }),
     [
       ready,
+      startup,
       entitlement,
       testEntitlement,
       premium,

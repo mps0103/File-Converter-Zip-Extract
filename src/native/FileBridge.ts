@@ -55,6 +55,116 @@ type PdfToolsBridgeType = {
   scanToPdf(baseName: string): Promise<SavedFile>;
 };
 
+/**
+ * What every PDF edit resolves with. `folder` is "" when the result is a single
+ * file straight in Downloads.
+ */
+export type PdfEditResult = {
+  files: SavedFile[];
+  folder: string;
+  bytesBefore?: number;
+  bytesAfter?: number;
+  /** Pictures re-saved by compress, or characters read by make-searchable. */
+  count?: number;
+  /** Make searchable: pages where nothing was recognised. */
+  emptyPages?: number;
+};
+
+type PdfEditBridgeType = {
+  merge(uris: string[], baseName: string): Promise<PdfEditResult>;
+  split(
+    uri: string,
+    password: string,
+    mode: string,
+    every: number,
+    ranges: string,
+    baseName: string,
+  ): Promise<PdfEditResult>;
+  deletePages(uri: string, password: string, ranges: string, baseName: string): Promise<PdfEditResult>;
+  rotate(
+    uri: string,
+    password: string,
+    degrees: number,
+    ranges: string,
+    baseName: string,
+  ): Promise<PdfEditResult>;
+  pageNumbers(
+    uri: string,
+    password: string,
+    position: string,
+    start: number,
+    baseName: string,
+  ): Promise<PdfEditResult>;
+  watermark(
+    uri: string,
+    password: string,
+    text: string,
+    opacityPercent: number,
+    diagonal: boolean,
+    baseName: string,
+  ): Promise<PdfEditResult>;
+  protect(
+    uri: string,
+    password: string,
+    newPassword: string,
+    allowPrint: boolean,
+    allowCopy: boolean,
+    baseName: string,
+  ): Promise<PdfEditResult>;
+  unlock(uri: string, password: string, baseName: string): Promise<PdfEditResult>;
+  compress(uri: string, password: string, level: string, baseName: string): Promise<PdfEditResult>;
+  toImages(
+    uri: string,
+    password: string,
+    format: string,
+    dpi: number,
+    baseName: string,
+  ): Promise<PdfEditResult>;
+  extractImages(uri: string, password: string, baseName: string): Promise<PdfEditResult>;
+  makeSearchable(uri: string, password: string, baseName: string): Promise<PdfEditResult>;
+};
+
+/** Every native job that edits files resolves with this: the files made and where. */
+export type EditResult = PdfEditResult;
+
+type ImageEditBridgeType = {
+  /**
+   * Runs one job on every picture, in order, saving each into Downloads. The opts
+   * are the engine's own — format, quality, maxEdge, width, height, scale, rotate,
+   * flipH, flipV, grayscale, aspect, anchor, dpi, dpiOnly, suffix and folder.
+   */
+  process(uris: string[], opts: Record<string, string | number | boolean>): Promise<EditResult>;
+  /** Reads the text of every picture into one .txt in Downloads. */
+  recognizeText(uris: string[], baseName: string): Promise<EditResult>;
+  /** A picture's size as it is seen, with its EXIF turn applied. */
+  dimensions(uri: string): Promise<{width: number; height: number}>;
+};
+
+type MediaEditBridgeType = {
+  /**
+   * Edits one video, or joins several, into an MP4 in Downloads. The opts are the
+   * engine's own — startMs, endMs, maxHeight, videoBitrate, rotate, mute, mergeWidth,
+   * mergeHeight, baseName and suffix.
+   */
+  video(uris: string[], opts: Record<string, string | number | boolean>): Promise<EditResult>;
+  /**
+   * Edits one audio file or the sound of a video, or joins several, into MP3, M4A,
+   * AAC or WAV in Downloads. The opts are the engine's own — format, bitrate,
+   * startMs, endMs, volume, fadeInMs, fadeOutMs, baseName and suffix.
+   */
+  audio(uris: string[], opts: Record<string, string | number | boolean>): Promise<EditResult>;
+  /** Length, picture size, bit rate and tracks of a media file. Writes nothing. */
+  probe(uri: string): Promise<{
+    durationMs: number;
+    width: number;
+    height: number;
+    bitrate: number;
+    hasVideo: boolean;
+    hasAudio: boolean;
+  }>;
+  cancel(): void;
+};
+
 /** What the app can write. RAR is deliberately absent — the format is proprietary
  *  and the bundled decoder only reads. */
 export type ArchiveFormat = 'zip' | '7z' | 'tar' | 'tar.gz' | 'tar.bz2' | 'tar.xz';
@@ -150,6 +260,18 @@ export const PdfToolsBridge: PdfToolsBridgeType =
   (NativeModules.PdfTools as PdfToolsBridgeType) ??
   new Proxy({} as PdfToolsBridgeType, {get: () => missing});
 
+export const PdfEditBridge: PdfEditBridgeType =
+  (NativeModules.PdfEdit as PdfEditBridgeType) ??
+  new Proxy({} as PdfEditBridgeType, {get: () => missing});
+
+export const ImageEditBridge: ImageEditBridgeType =
+  (NativeModules.ImageEdit as ImageEditBridgeType) ??
+  new Proxy({} as ImageEditBridgeType, {get: () => missing});
+
+export const MediaEditBridge: MediaEditBridgeType =
+  (NativeModules.MediaEdit as MediaEditBridgeType) ??
+  new Proxy({} as MediaEditBridgeType, {get: () => missing});
+
 export const ArchiveBridge: ArchiveBridgeType =
   (NativeModules.ArchiveBridge as ArchiveBridgeType) ??
   new Proxy({} as ArchiveBridgeType, {get: () => missing});
@@ -165,6 +287,27 @@ export const onArchiveProgress = (fn: (p: ArchiveProgress) => void) => {
 export const onPdfToolsProgress = (fn: (p: ArchiveProgress) => void) => {
   const emitter = new NativeEventEmitter(NativeModules.PdfTools);
   const sub = emitter.addListener('pdfToolsProgress', fn);
+  return () => sub.remove();
+};
+
+/** Fires as each page or file of a PDF edit is really finished. */
+export const onPdfEditProgress = (fn: (p: ArchiveProgress) => void) => {
+  const emitter = new NativeEventEmitter(NativeModules.PdfEdit);
+  const sub = emitter.addListener('pdfEditProgress', fn);
+  return () => sub.remove();
+};
+
+/** Fires as each picture is really finished. */
+export const onImageEditProgress = (fn: (p: ArchiveProgress) => void) => {
+  const emitter = new NativeEventEmitter(NativeModules.ImageEdit);
+  const sub = emitter.addListener('imageEditProgress', fn);
+  return () => sub.remove();
+};
+
+/** Fires as a video or audio job really advances; done and total are percent. */
+export const onMediaEditProgress = (fn: (p: ArchiveProgress) => void) => {
+  const emitter = new NativeEventEmitter(NativeModules.MediaEdit);
+  const sub = emitter.addListener('mediaEditProgress', fn);
   return () => sub.remove();
 };
 

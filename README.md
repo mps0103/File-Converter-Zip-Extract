@@ -1,6 +1,6 @@
 # File Converter & Zip Extract
 
-Offline document and archive converter for Android. React Native + TypeScript, one Kotlin module for the parts that must be native. Every conversion runs on the device — the app works in airplane mode.
+Offline file toolbox for Android: documents, PDFs, pictures, audio, video and archives. React Native + TypeScript, with Kotlin modules for the parts that must be native. Every conversion runs on the device — the app works in airplane mode.
 
 ## Run it
 
@@ -13,6 +13,8 @@ Release build:
 ```bash
 cd android && gradlew bundleRelease
 ```
+
+The release build generates its own JavaScript bundle. A debug build does not: it loads JavaScript from Metro, so run `npx react-native start` (and `adb reverse tcp:8081 tcp:8081` on a USB phone) before opening a debug APK. There is no bundle checked in or kept in `android/app/src/main/assets`.
 
 Copy `android/keystore.properties.example` to `android/keystore.properties` and point it at your upload key first, otherwise the release build is signed with the debug key and Play will reject it.
 
@@ -30,6 +32,28 @@ Copy `android/keystore.properties.example` to `android/keystore.properties` and 
 | CSV ↔ Excel | SheetJS | Full for values; formulas save as last computed value. |
 | Word → text | `mammoth` | Text only, by design. |
 | Extract archive | zip4j, commons-compress, junrar | ZIP (incl. password), 7Z, TAR, TAR.GZ, TGZ, GZ, BZ2, XZ, RAR4. Not RAR5. |
+| Make an archive | zip4j, commons-compress | ZIP (optionally AES-encrypted), 7Z, TAR, TAR.GZ, TAR.BZ2, TAR.XZ. Only ZIP carries a password. |
+| Images → PDF, Scan → PDF | Android bitmap decoding, PDFBox, Google's document scanner | One picture per A4 page; the scanner finds page edges and straightens them. |
+| **PDF tools** | | |
+| Merge, Split, Delete pages, Rotate | PDFBox | Pages and content are kept as they are. Merged bookmarks and form fields of later files are not carried over. |
+| Page numbers, Watermark | PDFBox, standard Helvetica | Honours each page's rotation. Watermark text is limited to what the standard PDF fonts hold. |
+| Add / remove password | PDFBox (AES-128) | Needs the current password to unlock. Nothing guesses or breaks passwords. |
+| Compress PDF | PDFBox + Android bitmap re-encoding | Pictures are re-saved as JPEG; text and drawings are untouched. Falls back to the original if nothing is saved. |
+| PDF → pictures | Android `PdfRenderer` | JPG or PNG per page, in a folder in Downloads. |
+| Extract pictures | PDFBox | Embedded pictures at their stored size; tiny ones (bullets, rules) are skipped. |
+| Make searchable | `PdfRenderer` + ML Kit text recognition (bundled) | Invisible text laid over a picture of each page. Latin script only. |
+| **Pictures** | | |
+| Convert, Resize, Compress, Crop, Rotate, Flip, Black & white | Android bitmap APIs, ExifInterface | EXIF orientation is applied, so a photo taken sideways comes out upright. Large JPEGs are decoded in bands to bound memory. Crop uses fixed shapes, not a drawn box. |
+| Change resolution | Bitmap scaling, JFIF / pHYs rewrite | Pixel size, or only the DPI field (JPG and PNG) with no re-encode. |
+| Image → text | ML Kit text recognition (bundled model) | Printed Latin text. Several pictures go into one .txt. |
+| **Video** | | |
+| Convert, Compress, Resolution, Rotate, Mute, Trim, Merge | AndroidX Media3 Transformer (hardware codecs) | Always MP4 (H.264 + AAC). Needs a phone that can decode the source. Trim takes typed times. |
+| Video → audio | MediaCodec pipeline + LAME | MP3, M4A or WAV from the sound track. |
+| **Audio** | | |
+| Convert, Compress, Bit rate, Volume, Fade, Trim, Merge, Ringtone | MediaCodec decode → resample → encode, LAME for MP3 | MP3, M4A, AAC or WAV at 44.1 kHz stereo. An MP3 trimmed to MP3 is copied without re-encoding. |
+| File info | MediaMetadataRetriever, PdfRenderer, bitmap bounds | Name, type, size, pages, picture size, length, bit rate. Free: writes nothing. |
+
+Everything that makes a new file saves into `Downloads/` through MediaStore. Tools that make several files (Split, PDF → pictures, Extract pictures, a batch of pictures) put them in their own folder there.
 
 Archives unpack into `Downloads/<archive name>/`, keeping the folder structure inside. Entry
 paths that try to escape that folder are rejected.
@@ -48,7 +72,7 @@ report anything they do not recognise as `application/octet-stream`.
 
 | Format | Drawn by |
 | --- | --- |
-| PDF | Android's own `PdfRenderer`, page by page, so the real layout is shown |
+| PDF | `react-native-pdf` (pdfium), the same reader the PDF Tools by MPS app uses: all pages in one scroll, native pinch zoom, a page counter that jumps to a page, Swipe/Scroll modes, Share. No Night mode (it needs React Native's new architecture). |
 | Word | `mammoth` to HTML in a WebView — headings, bold/italic, lists, tables, inline images |
 | Excel / CSV | SheetJS to HTML tables, every sheet, wide sheets scrolling sideways |
 | Slides | Slide text only, one card per slide |
@@ -66,15 +90,35 @@ matches the PDF the app would produce from it.
 
 ```
 src/
-  convert/     catalog of tools + the conversion engine
-  native/      typed wrapper over the Kotlin bridge
+  convert/     catalog of tools (and the home-screen folders) + the conversion engine
+  native/      typed wrapper over the Kotlin bridges
   services/    ads, billing, quota, history, storage
-  hooks/       app-wide state (entitlement, quota, history)
-  components/  glyphs, dialogs, buttons, progress ring
-  screens/     splash, home, convert, result, premium, history, settings
+  hooks/       app-wide state (entitlement, quota, history, start-up progress)
+  components/  glyphs, dialogs, buttons, progress ring, folder and tool cards, loading bar
+  screens/     splash, start-up, home, folder, convert, result, premium, history, settings
 android/app/src/main/java/com/mps/fileconverter/
-  FileBridgeModule.kt   SAF picking, MediaStore saving, PDF text + render, image transcode
+  FileBridgeModule.kt   SAF picking, MediaStore saving, PDF text + render
+  ArchiveModule.kt      extract and make archives
+  PdfToolsModule.kt     pictures → PDF, document scanner
+  PdfEditModule.kt      merge, split, rotate, delete, numbers, watermark, passwords, compress, pictures, OCR
+  ImageEditModule.kt    every picture tool and picture OCR
+  MediaEditModule.kt    every audio and video tool
+  Mp3Encoder.kt         JNI bridge to LAME
+  DownloadsWriter.kt    one way of saving a result into Downloads
+android/app/src/main/cpp/  LAME 3.100 (LGPL) built as libmp3lame.so, 16 KB page aligned
 ```
+
+Every native module reports real progress as `{stage, done, total}` events (`archiveProgress`, `pdfEditProgress`, `imageEditProgress`, `mediaEditProgress`). The progress ring shows those values and nothing else. The start-up bar after the splash counts finished start-up steps (plan, usage, history, billing, ads).
+
+## Home screen
+
+The home screen is a set of folders — PDF tools, To & from PDF, Pictures, Video, Audio, Documents & sheets, Archives, More — each opening into its own list of tools. A tool belongs to one `group` in `src/convert/catalog.ts`; `FOLDERS` there decides which groups sit in which folder.
+
+## Open-source notices
+
+The PDF reader is `react-native-pdf` 7.0.5 with `react-native-blob-util` 0.24.10, on the AndroidPdfViewer / pdfium libraries (Apache 2.0 / BSD). Their native libraries are 16 KB page aligned on arm64-v8a and x86_64.
+
+The MP3 encoder is LAME 3.100, licensed LGPL. It is built as its own shared library (`libmp3lame.so`) so it stays separately replaceable; its source and licence are in `android/app/src/main/cpp/lame/`.
 
 ## Money
 
